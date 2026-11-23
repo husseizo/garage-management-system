@@ -7,20 +7,20 @@
 
 ## Acceptance criteria
 
-| # | Criterion | Result | Evidence |
-| --- | --- | --- | --- |
-| 1 | App starts | ✅ | `next start` served all routes (manual browser check + Playwright web server) |
-| 2 | TypeScript validation | ✅ | `npm run typecheck`: no errors (strict mode) |
-| 3 | Linting | ✅ | `npm run lint`: 0 errors, 0 warnings; Prettier check clean |
-| 4 | Production build | ✅ | `npm run build`: 17 routes plus the proxy compiled |
-| 5 | Foundational tests | ✅ | Vitest unit 38/38, integration 11/11 (1 skipped: live Neon) |
-| 6 | Routes render | ✅ | Playwright: `/`, `/book`, `/track`, `/portal`, `/login`, 404 on desktop and mobile |
-| 7 | Protected routes reject unauthenticated access | ✅ | Playwright: all 9 `/dashboard*` routes return a 307 to `/login?callbackUrl=…`; a forged session cookie is rejected |
-| 8 | Prisma configured | ✅ | Prisma 7.10.1, Neon adapter, client generated, initial migration committed |
-| 9 | Neon dev connectivity | ⚠️ **Not verified** | No `DATABASE_URL` available. The test is in place and is skipped, not passed |
-| 10 | GitHub repo and workflow | ✅ (partial) | Private repo, `main`/`develop`/feature branches, PR open. **Branch protection is not available** on a free-plan private repo |
-| 11 | CI committed | ✅ | `.github/workflows/ci.yml` (first run happens on this PR) |
-| 12 | Architecture docs | ✅ | `docs/architecture/*`, 7 ADRs |
+| #   | Criterion                                      | Result              | Evidence                                                                                                                     |
+| --- | ---------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | App starts                                     | ✅                  | `next start` served all routes (manual browser check + Playwright web server)                                                |
+| 2   | TypeScript validation                          | ✅                  | `npm run typecheck`: no errors (strict mode)                                                                                 |
+| 3   | Linting                                        | ✅                  | `npm run lint`: 0 errors, 0 warnings; Prettier check clean                                                                   |
+| 4   | Production build                               | ✅                  | `npm run build`: 17 routes plus the proxy compiled                                                                           |
+| 5   | Foundational tests                             | ✅                  | Vitest unit 38/38, integration 11/11 (1 skipped: live Neon)                                                                  |
+| 6   | Routes render                                  | ✅                  | Playwright: `/`, `/book`, `/track`, `/portal`, `/login`, 404 on desktop and mobile                                           |
+| 7   | Protected routes reject unauthenticated access | ✅                  | Playwright: all 9 `/dashboard*` routes return a 307 to `/login?callbackUrl=…`; a forged session cookie is rejected           |
+| 8   | Prisma configured                              | ✅                  | Prisma 7.10.1, Neon adapter, client generated, initial migration committed                                                   |
+| 9   | Neon dev connectivity                          | ⚠️ **Not verified** | No `DATABASE_URL` available. The test is in place and is skipped, not passed                                                 |
+| 10  | GitHub repo and workflow                       | ✅ (partial)        | Private repo, `main`/`develop`/feature branches, PR open. **Branch protection is not available** on a free-plan private repo |
+| 11  | CI committed                                   | ✅                  | `.github/workflows/ci.yml` (first run happens on this PR)                                                                    |
+| 12  | Architecture docs                              | ✅                  | `docs/architecture/*`, 7 ADRs                                                                                                |
 
 Validation was run locally on Node 22.23.5. Playwright ran on Chromium (Desktop Chrome and Pixel 7
 profiles) and passed 42/42.
@@ -54,16 +54,19 @@ profiles) and passed 42/42.
 ## Outstanding
 
 **Missing credentials**
+
 - Neon: need `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) for the **development** branch.
   Then run `npm run db:migrate:deploy`, `npm run staff:create …`, and confirm `/api/health`.
   Optional: add the repo secret `NEON_DEV_DATABASE_URL` so CI runs the live check.
 
 **Not verified**
+
 - The signed-in dashboard UI (sidebar, role-based settings access) has not been exercised
   end-to-end, because a staff account needs the database. Guards are covered by integration tests.
 - CI has not run on GitHub yet. Its first run is on the Phase 0 PR.
 
 **Known risks**
+
 - Auth.js v5 is a beta release (ADR 0002/0004).
 - `npm audit`: 3 high (ReDoS in `effect`, pulled in by the Prisma CLI config loader). It is not
   reachable from runtime input. Track the Prisma update.
@@ -72,6 +75,7 @@ profiles) and passed 42/42.
 - No rate limiting on staff sign-in yet.
 
 **Blockers for Phase 1**
+
 - Neon development credentials.
 - Branch protection on `main` needs GitHub Pro (or the team plan), or the owner must agree to
   enforce "PR-only into main" by convention.
