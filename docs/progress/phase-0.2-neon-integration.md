@@ -118,7 +118,10 @@ Task 9 coverage:
 
 ## 8. Outstanding issues
 
-- **CI has not run yet** on GitHub (Phase 0 PR). CI runs the no-database suites; the live checks
+- **CI on the Phase 0 PR failed** its first run on `prettier --check` (`docs/progress/phase-0-report.md`
+  was committed unformatted — the Phase 0 report's "Prettier clean" claim was wrong for the
+  committed file). Fixed in `3298dc3` on `feature/phase-0-foundation`; the re-run result is pending.
+  CI now also runs on PRs into `feature/**` so this stacked PR is checked. CI runs the no-database suites; the live checks
   run in CI only if the owner adds the repo secret `NEON_DEV_DATABASE_URL` (not done — sending a
   credential to GitHub needs owner approval).
 - **`npm audit`:** 7 (3 high, 4 moderate), all in development tooling: `effect` ReDoS via the Prisma
