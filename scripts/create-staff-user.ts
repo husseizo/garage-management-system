@@ -4,7 +4,8 @@
  *   npm run staff:create -- --email owner@example.test --name "Alex Owner" --role OWNER
  *
  * The password is read from a hidden prompt (or STAFF_PASSWORD for non-interactive use) and is
- * never printed or logged. Refuses to run when NODE_ENV=production.
+ * never printed or logged. Refuses to run when NODE_ENV=production or when NEON_BRANCH names a
+ * production branch (see src/server/db/target.ts).
  */
 import "dotenv/config";
 
@@ -14,6 +15,7 @@ import { createInterface } from "node:readline";
 import { PrismaNeon } from "@prisma/adapter-neon";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { assertWritableTarget } from "../src/server/db/target";
 import { hashPassword } from "../src/modules/staff/password";
 import { isStaffRole } from "../src/modules/staff/roles";
 import { staffPasswordSchema } from "../src/modules/staff/schemas";
@@ -34,8 +36,7 @@ function promptHidden(question: string): Promise<string> {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === "production")
-    throw new Error("Refusing to run with NODE_ENV=production.");
+  assertWritableTarget(process.env, "create staff accounts");
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set (see .env.example).");
 
