@@ -73,8 +73,8 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────────────────────
   # Live-database tests on the dedicated Neon `ci-testing` branch (owner decision J-05).
-  # Never the `development` or `production` branch. Skipped (not failed) until the owner adds the
-  # repository secrets documented in docs/operations/ci-database.md.
+  # Never the `development` or `production` branch. FAILS (does not skip) when the repository
+  # secrets are missing — see docs/operations/ci-database.md.
   # ─────────────────────────────────────────────────────────────────────────────────────────────
   database:
     name: Database tests (Neon ci-testing)
@@ -90,38 +90,32 @@ jobs:
       DATABASE_URL_UNPOOLED: ${{ secrets.NEON_CI_DATABASE_URL_UNPOOLED }}
       NEON_BRANCH: ci-testing
       NODE_ENV: test
-      # Known development and production endpoints; the job refuses to run against them.
+      # Known development and production endpoints; every database step refuses to run against them.
       CI_FORBIDDEN_ENDPOINTS: ep-rapid-lake-bgk09wmz,ep-winter-cake-bg5s9xnm
     steps:
-      - name: Check CI database secrets
-        id: secrets
+      - name: Require CI database secrets
         run: |
           if [ -z "$DATABASE_URL" ] || [ -z "$DATABASE_URL_UNPOOLED" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::NEON_CI_DATABASE_URL / NEON_CI_DATABASE_URL_UNPOOLED not set; database tests skipped."
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "::error title=Missing CI database secrets::Set NEON_CI_DATABASE_URL and NEON_CI_DATABASE_URL_UNPOOLED (docs/operations/ci-database.md). Database tests did NOT run."
+            exit 1
           fi
       - uses: actions/checkout@v4
-        if: steps.secrets.outputs.configured == 'true'
       - uses: actions/setup-node@v4
-        if: steps.secrets.outputs.configured == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
-      - if: steps.secrets.outputs.configured == 'true'
-        run: npm ci
-      - name: Verify target is the ci-testing branch (not development/production)
-        if: steps.secrets.outputs.configured == 'true'
+      - run: npm ci
+      - name: Verify target is the ci-testing branch (identity guard)
         run: npm run db:verify-ci
       - name: Apply migrations to ci-testing
-        if: steps.secrets.outputs.configured == 'true'
         run: npm run db:migrate:deploy
+      - name: Migration status and drift check
+        run: |
+          npm run db:migrate:status
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - name: Integration tests (live database)
-        if: steps.secrets.outputs.configured == 'true'
         run: npm run test:integration
       - name: Create ephemeral test staff accounts
-        if: steps.secrets.outputs.configured == 'true'
         run: |
           set -euo pipefail
           umask 077
@@ -133,19 +127,18 @@ jobs:
           STAFF_PASSWORD="$OWNER_PW" npm run staff:create -- --email e2e.owner@example.test --name "E2E Owner" --role OWNER
           STAFF_PASSWORD="$TECH_PW" npm run staff:create -- --email e2e.technician@example.test --name "E2E Technician" --role TECHNICIAN
       - name: Set the ci-testing garage profile
-        if: steps.secrets.outputs.configured == 'true'
         run: npm run garage:profile -- --name "MAPESA GARAGE" --country TZ --timezone Africa/Dar_es_Salaam --currency TZS
-      - if: steps.secrets.outputs.configured == 'true'
-        run: npm run build
-      - if: steps.secrets.outputs.configured == 'true'
-        run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
       - name: Playwright (database mode)
-        if: steps.secrets.outputs.configured == 'true'
         run: npm run test:e2e
         env:
           E2E_DATABASE: "1"
+      - name: Remove E2E business records from ci-testing
+        if: always()
+        run: npm run db:ci-cleanup
       - uses: actions/upload-artifact@v4
-        if: failure() && steps.secrets.outputs.configured == 'true'
+        if: failure()
         with:
           name: playwright-report-database
           path: playwright-report

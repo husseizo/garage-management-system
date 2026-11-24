@@ -9,7 +9,7 @@
   (`ep-winter-cake-bg5s9xnm`). All three migrations applied, drift check clean, live integration
   tests 35/35, and no rows left behind.
 - **Still required (owner):** the two GitHub secrets below. Until they exist, the CI `database`
-  job is skipped with a notice (not a failure).
+  job **fails** with "Missing CI database secrets" (it never silently passes).
 
 ## Why a separate branch
 
@@ -47,8 +47,11 @@
    `neondb_owner`.
 
 3. Re-run CI on the open PR. The `database` job then runs:
-   `db:verify-ci` → `db:migrate:deploy` → integration tests → ephemeral staff accounts (random,
-   masked passwords) → MAPESA GARAGE profile → build → Playwright with `E2E_DATABASE=1`.
+   `db:verify-ci` → `db:migrate:deploy` → migration status + drift check → integration tests →
+   ephemeral staff accounts (random, masked passwords) → MAPESA GARAGE profile → build →
+   Playwright with `E2E_DATABASE=1` → **`db:ci-cleanup` (always)**, which removes the E2E customers,
+   vehicles, plates, ownerships and rate-limit counters. Staff accounts and audit rows remain
+   because the audit log is append-only.
 
 ## Maintenance
 
