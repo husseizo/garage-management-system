@@ -64,6 +64,22 @@
 - **Access**: owner/manager only, read-only. Audit reads of sensitive records are themselves audited
   from 1D.
 
+### 4.1 Audit log retention and privacy review (Phase 1A)
+
+Reviewed 2026-11-24 against the implemented `audit_logs` table and Tanzania's Personal Data
+Protection Act, 2022 (legal confirmation pending, Q-06).
+
+| Topic                    | Finding / rule                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Immutability vs. erasure | Audit rows cannot be edited, so **personal data must never enter them**. Customers are referenced only by UUID (`entity_id`). After anonymisation, the UUID no longer resolves to a person, so the audit trail becomes pseudonymous without rewriting it.                                                                                             |
+| `changes` content        | Allow-list only: each module declares which fields may be audited. Contact values are masked (`+2557•••••678`, `j•••@example.com`), and names are recorded as "changed" without values. Secrets, hashes, OTPs, tokens, file contents and free-text notes are never written. Phase 1B adds a `recordAudit()` helper with unit tests for this.          |
+| Staff identity           | `actor_staff_user_id` is staff personal data, processed for security and accountability (legitimate interest). Staff are deactivated, not deleted (RESTRICT), so the actor stays attributable.                                                                                                                                                        |
+| Network data             | No raw IP addresses or user agents are stored. `metadata` may hold a keyed hash for abuse investigation only.                                                                                                                                                                                                                                         |
+| Access                   | Read-only, owner and manager roles only (1D). Exports of audit data are themselves audited.                                                                                                                                                                                                                                                           |
+| Retention                | Proposed 7 years, covering the tax-record retention commonly required under Tanzania's Tax Administration Act (to be confirmed, Q-06). Rows older than the period are removed only by the purge procedure below.                                                                                                                                      |
+| Purge procedure          | Owner-approved, one transaction: `ALTER TABLE audit_logs DISABLE TRIGGER audit_logs_no_update_delete` → `DELETE … WHERE occurred_at < cutoff` → re-enable trigger → insert an `audit_logs.purged` row recording cutoff and count. Run only with production approval; partition by year once volume justifies it, so a purge becomes a partition drop. |
+| Phase 1A data            | Development contains two `SYSTEM` rows for the MAPESA GARAGE profile set-up (business data, no personal data). One has an empty `changes` object from an idempotent re-run; the script now skips no-op writes.                                                                                                                                        |
+
 ## 5. Sensitive data handling
 
 | Data                           | Classification | Handling                                                                            |
@@ -106,9 +122,10 @@ scoped by `country_code`. The display form (`plate_raw`) is preserved.
   (1B).
 - **Vehicles.** Same `vin_normalised` → hard unique (DB). Same plate currently active → exclusion
   constraint (DB). Same make/model/year plus similar plate → warning (APP).
-- **Phone shared by two customers.** Allowed until Q-03 is decided. Verified contacts are the basis
-  for portal sign-in, so one verified phone resolves to exactly one customer (partial unique on
-  verified contacts, 1B).
+- **Phone shared by several customers: allowed (owner decision D-05).** Family members, a company
+  and its driver, or a mechanic's customers may share one number. A shared number is a
+  duplicate-candidate signal for staff, never a reason to block a save or to merge automatically. A
+  number appears at most once per customer (partial unique per customer).
 
 ## 8. Data retention (proposal, pending Q-06)
 
@@ -155,12 +172,22 @@ Side effects go through the outbox.
   (ADR 0011).
 - **OTP challenge:** 6 digits, HMAC-hashed, 10-minute expiry, at most 5 attempts per challenge, at
   most 3 challenges per target per hour and per IP hash, lockout events in `auth_events`.
+- **Phone verification is not authorisation (owner decision D-06, ADR 0013).** A successful OTP proves
+  control of a phone or email and signs the person in to a `customer_portal_accounts` identity. It
+  grants access to **no** customer profile by itself, even if that number appears on several
+  customers.
+- **Explicit per-customer grants.** Access to a customer requires an active `customer_portal_access`
+  row (`HOLDER` for an individual; `COMPANY_ADMIN` or `COMPANY_VIEWER` for a company). Grants are
+  created only by an explicit, audited action (staff, after identity checks at the counter or by
+  call-back; or a future invitation accepted by an existing holder). They are revocable and are never
+  created automatically from a phone match.
 - **Customer session:** random 256-bit token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; only
   the SHA-256 hash is stored in `auth_sessions`; 30-minute idle and 12-hour absolute expiry;
-  revocable.
-- **Scope:** a customer session can read only rows where `customer_id` equals the session's customer,
-  or vehicles where that customer is the current owner (BR-05). Every portal query goes through an
-  `assertCustomer()` guard (mirrors `assertStaff()`); there is no generic "fetch by id" for portal
-  code.
+  revocable. The session carries the portal account plus the `active_customer_id` the person chose
+  from their grants.
+- **Scope:** every portal query goes through an `assertCustomerAccess(customerId)` guard that
+  re-checks the live grant (mirrors `assertStaff()`). Reads are limited to that customer's rows and
+  to vehicles that customer currently owns (BR-05). There is no generic "fetch by id" for portal
+  code. Revoking a grant takes effect on the next request.
 - **Staff:** unchanged from Phase 0 (layered proxy → page → data guards). Fine-grained permissions in
   1D.

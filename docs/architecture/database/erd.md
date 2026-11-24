@@ -79,8 +79,8 @@ erDiagram
     }
     auth_sessions {
         uuid id PK
-        SessionSubject subject_type "CUSTOMER | STAFF"
-        uuid customer_id FK
+        SessionSubject subject_type "PORTAL_ACCOUNT | STAFF"
+        uuid portal_account_id FK
         text staff_user_id FK
         bytea token_hash UK
         timestamptz expires_at
@@ -100,9 +100,30 @@ erDiagram
     roles ||--o{ staff_role_assignments : "assigned in"
     staff_users ||--o{ auth_sessions : "signs in (staff, future)"
     staff_users ||--o{ auth_events : generates
+    customer_portal_accounts {
+        uuid id PK
+        ContactKind kind "PHONE | EMAIL"
+        text value_normalised UK "E.164 or lower-case email"
+        timestamptz verified_at
+        timestamptz disabled_at
+    }
+    customer_portal_access {
+        uuid id PK
+        uuid portal_account_id FK
+        uuid customer_id FK
+        PortalRole role "HOLDER | COMPANY_ADMIN | COMPANY_VIEWER"
+        text granted_by_staff_user_id FK
+        timestamptz revoked_at "partial UK (portal_account_id, customer_id) where revoked_at is null"
+    }
+    customer_portal_accounts ||--o{ customer_portal_access : "is granted"
+    customer_portal_accounts ||--o{ auth_sessions : "signs in (customer)"
 ```
 
-`auth_sessions` uses an exclusive-arc check: exactly one of `customer_id`/`staff_user_id` is set,
+Customer sessions belong to a **portal account** (a person proving control of a phone/email), not
+to a customer. Several customers may share a phone (D-05), so access to each customer requires its
+own `customer_portal_access` grant (ADR 0013). The `customers` table is in diagram B.
+
+`auth_sessions` uses an exclusive-arc check: exactly one of `portal_account_id`/`staff_user_id` is set,
 matching `subject_type`. Both are real FKs, so this is not polymorphism.
 
 ## B. Customer management
@@ -111,7 +132,7 @@ matching `subject_type`. Both are real FKs, so this is not polymorphism.
 erDiagram
     customers {
         uuid id PK
-        CustomerKind kind "INDIVIDUAL | ORGANISATION"
+        CustomerKind kind "INDIVIDUAL | COMPANY"
         text display_name
         text preferred_language
         timestamptz deleted_at "soft delete"
@@ -122,7 +143,8 @@ erDiagram
         uuid customer_id FK
         ContactKind kind "PHONE | EMAIL"
         text value_raw
-        text value_normalised "E.164 or lower-case email"
+        text value_normalised "E.164 or lower-case email; NOT unique across customers (D-05)"
+        text contact_person_name "COMPANY contacts"
         boolean is_primary "partial UK (customer_id, kind) where is_primary"
         timestamptz verified_at
         timestamptz deleted_at

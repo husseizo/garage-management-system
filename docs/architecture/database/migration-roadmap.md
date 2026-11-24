@@ -21,7 +21,7 @@
 | P0     | Staff authentication                     | 1          | —          |
 | **1A** | Shared platform foundation               | **2**      | P0         |
 | 1B     | Customers and vehicles                   | 6          | 1A         |
-| 1C     | Guest booking                            | 10         | 1B         |
+| 1C     | Guest booking and customer portal access | 12         | 1B         |
 | 1D     | Dashboard, booking management, RBAC      | 5          | 1C         |
 | 1E     | Scheduling resources and appointments    | 15         | 1D         |
 | 1F     | Consent, notifications, reminders        | 13         | 1E         |
@@ -40,7 +40,7 @@
 | Indexes             | `garage_profile_singleton_key` (UK); `audit_logs_entity_idx`, `audit_logs_actor_staff_idx`, `audit_logs_action_idx`                                                           |
 | Constraints         | FK `audit_logs_actor_staff_user_id_fkey` (RESTRICT); 8 CHECKs on `garage_profile`; 8 CHECKs on `audit_logs`; triggers `audit_logs_no_update_delete`, `audit_logs_no_truncate` |
 | Dependencies        | PostgreSQL ≥ 18 (`uuidv7()`); `staff_users`                                                                                                                                   |
-| Data migration      | None. No seed rows (the owner enters the real garage profile, Q-02)                                                                                                           |
+| Data migration      | None in the migration. The owner-approved MAPESA GARAGE profile (TZ, Africa/Dar_es_Salaam, TZS) is set per environment with `npm run garage:profile` (done on `development`)  |
 | Verification tests  | `tests/integration/phase-1a-schema.test.ts`: UUIDv7 keys, singleton, every CHECK, FK, RESTRICT, append-only (UPDATE/DELETE/TRUNCATE). Existing staff auth E2E. Drift check    |
 | Rollback / recovery | Additive. If needed before any data exists: a forward migration dropping the two tables, the enum and the function (owner approval). With data: keep the tables               |
 
@@ -50,10 +50,14 @@ audit row in the same transaction. Nothing else is created early.
 
 ## Phase 1B — customer and vehicle management
 
+Detailed plan for owner review: [`docs/progress/phase-1b-plan.md`](../../progress/phase-1b-plan.md).
+Owner decisions D-01–D-07 (`domain-model.md` §6.1) apply: `INDIVIDUAL`/`COMPANY` customers, shared
+phone numbers allowed, Tanzania (+255) phone normalisation.
+
 | Item               | Detail                                                                                                                                                                                                                             |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tables introduced  | `customers`, `customer_contacts`, `vehicles`, `vehicle_registrations`, `vehicle_ownerships`, `customer_merges`                                                                                                                     |
-| Tables modified    | `audit_logs` + `actor_customer_id uuid NULL` FK → `customers` (RESTRICT); replace CHECK `audit_logs_staff_actor_consistent` with one covering CUSTOMER (drop/add constraint in one tx, which is metadata-only)                     |
+| Tables modified    | `audit_logs` + `subject_customer_id uuid NULL`, `subject_vehicle_id uuid NULL` (by value, indexed) for activity timelines. `actor_portal_account_id` arrives in 1C with the portal                                                 |
 | Extensions         | `btree_gist` (ownership and plate exclusion), `pg_trgm` (duplicate search)                                                                                                                                                         |
 | Indexes            | Partial UK VIN; partial UK primary contact per kind; `(kind, value_normalised)`; trigram on `lower(display_name)`, `plate_normalised`; FK indexes                                                                                  |
 | Constraints        | EXCLUDE one active plate per `(country_code, plate_normalised)`; EXCLUDE one `OWNER` per vehicle at a time; E.164 and VIN CHECKs; name-by-kind CHECK                                                                               |
@@ -64,16 +68,16 @@ audit row in the same transaction. Nothing else is created early.
 
 ## Phase 1C — guest booking schema and workflow
 
-| Item               | Detail                                                                                                                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tables introduced  | `service_categories`, `service_definitions`, `booking_requests`, `booking_request_services`, `booking_status_history`, `file_attachments`, `booking_attachments`, `customer_verification_challenges`, `auth_sessions`, `auth_events` |
-| Tables modified    | —                                                                                                                                                                                                                                    |
-| Indexes            | UK `booking_requests.reference`, UK `idempotency_key`; `(status, submitted_at)`; challenge `(target, created_at DESC)`; UK `auth_sessions.token_hash`                                                                                |
-| Constraints        | Status enum; CHECK attempts ≤ 5; exclusive arc on sessions; file MIME/size CHECKs                                                                                                                                                    |
-| Dependencies       | 1B (matching targets); object storage bucket; SMS provider for OTP (Q-07); rate limiting (Phase 0 open item)                                                                                                                         |
-| Data migration     | Seed the initial service catalogue through a reviewed migration or admin UI, **with real garage services from the owner**, never placeholders                                                                                        |
-| Verification tests | Guest submission never reveals matches (identical responses); idempotent replay; `/track` requires reference + OTP; OTP lockout; session scope test; no capacity consumed (BR-07)                                                    |
-| Rollback           | Additive                                                                                                                                                                                                                             |
+| Item               | Detail                                                                                                                                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tables introduced  | `service_categories`, `service_definitions`, `booking_requests`, `booking_request_services`, `booking_status_history`, `file_attachments`, `booking_attachments`, `customer_verification_challenges`, `customer_portal_accounts`, `customer_portal_access`, `auth_sessions`, `auth_events` |
+| Tables modified    | —                                                                                                                                                                                                                                                                                          |
+| Indexes            | UK `booking_requests.reference`, UK `idempotency_key`; `(status, submitted_at)`; challenge `(target, created_at DESC)`; UK `auth_sessions.token_hash`                                                                                                                                      |
+| Constraints        | Status enum; CHECK attempts ≤ 5; exclusive arc on sessions; file MIME/size CHECKs                                                                                                                                                                                                          |
+| Dependencies       | 1B (matching targets); object storage bucket; SMS provider for OTP (Q-07); rate limiting (Phase 0 open item)                                                                                                                                                                               |
+| Data migration     | Seed the initial service catalogue through a reviewed migration or admin UI, **with real garage services from the owner**, never placeholders                                                                                                                                              |
+| Verification tests | Guest submission never reveals matches (identical responses); idempotent replay; `/track` requires reference + OTP; OTP lockout; session scope test; no capacity consumed (BR-07)                                                                                                          |
+| Rollback           | Additive                                                                                                                                                                                                                                                                                   |
 
 ## Phase 1D — garage dashboard and booking management
 

@@ -84,22 +84,45 @@ schema.
 
 ## 5. Risks and open questions
 
-| #    | Risk / question                                                                                                                        |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| R-01 | `uuidv7()` ties the schema to PostgreSQL ≥ 18 (ADR 0008). Neon is 18.7.                                                                |
-| R-02 | CI does not run the live-DB tests (no `NEON_DEV_DATABASE_URL` secret). Schema constraints are verified locally only.                   |
-| R-03 | Table owners can drop the audit trigger; production access must stay restricted.                                                       |
-| R-04 | `staff_users` timestamps lack a time zone (Phase 0 debt); planned conversion migration.                                                |
-| R-05 | `npm audit`: 3 high, 4 moderate in dev tooling (unchanged).                                                                            |
-| R-06 | Sign-in rate limiting still missing (required before the public booking form in 1C).                                                   |
-| R-07 | `garage_profile` is empty until the owner enters real details; 1B phone normalisation depends on it.                                   |
-| Q    | Q-01–Q-10 in `domain-model.md` §6; most urgent for 1B: **Q-02 country/phone region**, **Q-03 shared phones**, **Q-04 fleet customers** |
+| #    | Risk / question                                                                                                                                       |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-01 | `uuidv7()` ties the schema to PostgreSQL ≥ 18 (ADR 0008). Neon is 18.7.                                                                               |
+| R-02 | CI does not run the live-DB tests (no `NEON_DEV_DATABASE_URL` secret). Schema constraints are verified locally only.                                  |
+| R-03 | Table owners can drop the audit trigger; production access must stay restricted.                                                                      |
+| R-04 | `staff_users` timestamps lack a time zone (Phase 0 debt); planned conversion migration.                                                               |
+| R-05 | `npm audit`: 3 high, 4 moderate in dev tooling (unchanged).                                                                                           |
+| R-06 | Sign-in rate limiting still missing (required before the public booking form in 1C).                                                                  |
+| R-07 | Resolved on `development`: the garage profile is set (MAPESA GARAGE, TZ). It must be set per environment before 1B goes live.                         |
+| Q    | Q-01–Q-04 decided by the owner (D-01–D-07). Still open: Q-05–Q-12 in `domain-model.md` §6.2 (Q-11 chassis numbers and Q-12 company TIN matter for 1B) |
 
 ## 6. Recommendation
 
 **CONDITIONAL GO for Phase 1B**, once:
 
 1. The Phase 1A PR passes CI and is reviewed and approved by the owner.
-2. The owner answers Q-02 (country/default phone region), Q-03 (shared phone numbers) and Q-04
-   (fleet/organisation customers), which shape the 1B constraints.
-3. The owner provides the real garage profile values (name, country, time zone, currency).
+2. ~~Q-02, Q-03, Q-04 answered~~: done (D-02, D-05, D-04).
+3. ~~Garage profile values~~: done (D-01, D-02).
+4. The owner approves the Phase 1B plan (`phase-1b-plan.md`).
+
+## 7. Owner confirmation and completion (2026-11-24, follow-up)
+
+| Requirement                                 | Result                                                                                                                                                                                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR #3 CI                                    | ✅ Both jobs green on `c641ab7` (typecheck/lint/unit/integration/build, Playwright). Re-runs on the follow-up commit                                                                                       |
+| Final code review                           | ✅ Migration additive only; tests roll back; no secrets in the diff. No defects found                                                                                                                      |
+| Phase 1A changes only on Neon `development` | ✅ `_prisma_migrations` on `development` lists both migrations; `production` still has no tables                                                                                                           |
+| Staff authentication                        | ✅ Playwright with the database (sign-in, protected sections, invalid password, sign-out)                                                                                                                  |
+| Audit retention and privacy review          | ✅ `business-rules.md` §4.1: no personal data in immutable rows, allow-list redaction, 7-year proposal, owner-approved purge procedure                                                                     |
+| Approved business decisions documented      | ✅ D-01–D-07 in `domain-model.md` §6.1; ERD, data dictionary, business rules and roadmap updated; **ADR 0013** (portal accounts and explicit per-customer grants) amends ADR 0011 for shared phone numbers |
+| Official name recorded                      | ✅ **MAPESA GARAGE** / **MAPESA GARAGE Management System** in `src/config/site.ts` (header, footer, page titles, sign-in card) and the docs                                                                |
+| Development garage profile                  | ✅ `npm run garage:profile` (guarded, audited): MAPESA GARAGE, `TZ`, `Africa/Dar_es_Salaam`, `TZS`. No contact details, address or logo were invented                                                      |
+
+Notes:
+
+- A second, idempotent run of the profile script wrote an `audit_logs` row with empty `changes`
+  before the script was changed to skip no-op updates. The row is harmless and cannot be removed
+  (append-only by design).
+- The Phase 1A schema tests now remove the real profile **inside** their rolled-back transaction so
+  the singleton checks start from zero rows. The real row is untouched.
+
+Phase 1B plan for owner review: [`phase-1b-plan.md`](phase-1b-plan.md).

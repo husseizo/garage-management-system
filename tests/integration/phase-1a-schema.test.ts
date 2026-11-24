@@ -30,11 +30,15 @@ describe.skipIf(!enabled)("Phase 1A schema (development branch, rolled back)", (
     await pool?.end();
   });
 
-  /** Runs `fn` in a transaction that is always rolled back. */
+  /**
+   * Runs `fn` in a transaction that is always rolled back. The real development garage profile
+   * (if any) is removed inside the transaction only, so singleton tests start from zero rows.
+   */
   async function inRollback(fn: (c: PoolClient) => Promise<void>) {
     const c = await pool.connect();
     try {
       await c.query("BEGIN");
+      await c.query("delete from garage_profile");
       await fn(c);
     } finally {
       await c.query("ROLLBACK");

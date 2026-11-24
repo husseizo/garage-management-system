@@ -1,6 +1,6 @@
 # 0011 — Customer identity, guest booking isolation and verification
 
-- **Status:** Accepted (design). Implemented in Phases 1B–1C
+- **Status:** Accepted (design), **amended by [0013](0013-customer-portal-access-grants.md)**. Implemented in Phases 1B–1C
 - **Date:** 2026-11-24
 
 ## Context
