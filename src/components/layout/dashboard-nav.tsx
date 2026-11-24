@@ -4,19 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NavIcon } from "@/components/layout/nav-icon";
-import { isNavActive, type DashboardNavGroup } from "@/config/navigation";
+import { isNavActive, type TranslatedNavGroup } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 
 export function DashboardNav({
   groups,
+  label,
   onNavigate,
 }: {
-  groups: DashboardNavGroup[];
+  groups: TranslatedNavGroup[];
+  label: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Dashboard" className="flex flex-col gap-6">
+    <nav aria-label={label} className="flex flex-col gap-6">
       {groups.map((group) => (
         <div key={group.label} className="flex flex-col gap-1">
           <p className="text-muted-foreground px-3 text-xs font-medium tracking-wide uppercase">

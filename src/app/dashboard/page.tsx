@@ -5,16 +5,22 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ROLE_LABELS } from "@/modules/staff/roles";
+import { getTranslator } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/translate";
 import { requireStaff } from "@/server/auth/guards";
 import { checkDatabase, type DatabaseHealth } from "@/server/db/health";
 
-export const metadata: Metadata = { title: "Overview" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslator())("nav.items.overview") };
+}
 
-const DB_STATUS: Record<DatabaseHealth["status"], { label: string; icon: typeof CheckCircle2 }> = {
-  ok: { label: "Connected", icon: CheckCircle2 },
-  unconfigured: { label: "Not configured", icon: CircleDashed },
-  error: { label: "Unreachable", icon: XCircle },
+const DB_STATUS: Record<
+  DatabaseHealth["status"],
+  { label: MessageKey; icon: typeof CheckCircle2 }
+> = {
+  ok: { label: "overview.dbOk", icon: CheckCircle2 },
+  unconfigured: { label: "overview.dbUnconfigured", icon: CircleDashed },
+  error: { label: "overview.dbError", icon: XCircle },
 };
 
 export default async function DashboardHome({
@@ -22,60 +28,61 @@ export default async function DashboardHome({
 }: {
   searchParams: Promise<{ denied?: string }>;
 }) {
-  const [staff, { denied }, database] = await Promise.all([
+  const [staff, { denied }, database, t] = await Promise.all([
     requireStaff({ returnTo: "/dashboard" }),
     searchParams,
     checkDatabase(),
+    getTranslator(),
   ]);
   const db = DB_STATUS[database.status];
+  const firstName = staff.name ? staff.name.split(" ")[0] : "";
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Welcome${staff.name ? `, ${staff.name.split(" ")[0]}` : ""}`}
-        description="Workshop overview. Operational figures will appear here once bookings and scheduling are live."
+        title={firstName ? t("overview.welcomeName", { name: firstName }) : t("overview.welcome")}
+        description={t("overview.description")}
       />
 
       {denied ? (
         <Alert variant="destructive">
           <ShieldAlert aria-hidden />
-          <AlertTitle>Access denied</AlertTitle>
-          <AlertDescription>Your role does not have access to that page.</AlertDescription>
+          <AlertTitle>{t("overview.accessDenied")}</AlertTitle>
+          <AlertDescription>{t("overview.accessDeniedBody")}</AlertDescription>
         </Alert>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardDescription>Signed in as</CardDescription>
+            <CardDescription>{t("overview.signedInAs")}</CardDescription>
             <CardTitle className="text-base">{staff.name || staff.email}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge variant="secondary">{ROLE_LABELS[staff.role]}</Badge>
+            <Badge variant="secondary">{t(`roles.${staff.role}`)}</Badge>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Database</CardDescription>
+            <CardDescription>{t("overview.database")}</CardDescription>
             <CardTitle className="flex items-center gap-2 text-base">
               <db.icon className="size-4" aria-hidden />
-              {db.label}
+              {t(db.label)}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground text-sm">
             {database.status === "ok"
-              ? `Responded in ${database.latencyMs} ms.`
-              : "See /api/health for status."}
+              ? t("overview.dbLatency", { ms: database.latencyMs })
+              : t("overview.dbSeeHealth")}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Today&apos;s workshop</CardDescription>
-            <CardTitle className="text-base">No data yet</CardTitle>
+            <CardDescription>{t("overview.today")}</CardDescription>
+            <CardTitle className="text-base">{t("overview.noData")}</CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground text-sm">
-            Appointments, bay utilisation and pending requests will show here when scheduling is
-            enabled.
+            {t("overview.todayBody")}
           </CardContent>
         </Card>
       </div>

@@ -31,7 +31,11 @@ model StaffUser {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  auditLogs AuditLog[]
+  auditLogs             AuditLog[]
+  customersCreated      Customer[]            @relation("CustomerCreatedBy")
+  vehiclesCreated       Vehicle[]             @relation("VehicleCreatedBy")
+  ownershipsRecorded    VehicleOwnership[]    @relation("OwnershipRecordedBy")
+  registrationsRecorded VehicleRegistration[] @relation("RegistrationRecordedBy")
 
   @@map("staff_users")
 }
@@ -78,22 +82,192 @@ enum AuditActorType {
 /// Append-only audit trail. UPDATE and DELETE are rejected by a database trigger.
 /// `entity_type`/`entity_id` reference rows by value on purpose (ADR 0012).
 model AuditLog {
-  id               String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  occurredAt       DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  actorType        AuditActorType @map("actor_type")
-  actorStaffUserId String?        @map("actor_staff_user_id")
-  actorStaffUser   StaffUser?     @relation(fields: [actorStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  id                String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  occurredAt        DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorType         AuditActorType @map("actor_type")
+  actorStaffUserId  String?        @map("actor_staff_user_id")
+  actorStaffUser    StaffUser?     @relation(fields: [actorStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   /// Dotted verb, e.g. "garage_profile.updated", "staff.sign_in".
-  action           String
-  entityType       String?        @map("entity_type")
-  entityId         String?        @map("entity_id")
+  action            String
+  entityType        String?        @map("entity_type")
+  entityId          String?        @map("entity_id")
   /// Redacted before/after field values. Never secrets, hashes or full contact details.
-  changes          Json?          @db.JsonB
-  metadata         Json?          @db.JsonB
-  requestId        String?        @map("request_id")
+  changes           Json?          @db.JsonB
+  metadata          Json?          @db.JsonB
+  requestId         String?        @map("request_id")
+  /// Phase 1B: customer/vehicle whose activity timeline this row belongs to (by value, ADR 0012).
+  subjectCustomerId String?        @map("subject_customer_id") @db.Uuid
+  subjectVehicleId  String?        @map("subject_vehicle_id") @db.Uuid
 
   @@index([entityType, entityId, occurredAt(sort: Desc)], map: "audit_logs_entity_idx")
   @@index([actorStaffUserId, occurredAt(sort: Desc)], map: "audit_logs_actor_staff_idx")
   @@index([action, occurredAt(sort: Desc)], map: "audit_logs_action_idx")
+  @@index([subjectCustomerId, occurredAt(sort: Desc)], map: "audit_logs_subject_customer_idx")
+  @@index([subjectVehicleId, occurredAt(sort: Desc)], map: "audit_logs_subject_vehicle_idx")
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1B — customers and vehicles (docs/progress/phase-1b-plan.md).
+// Exclusion constraints (one primary contact, plate/ownership non-overlap, VIN uniqueness among
+// active vehicles), CHECKs and the rate-limit table's housekeeping live in the migration SQL.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CustomerKind {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum ContactKind {
+  PHONE
+  EMAIL
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  HYBRID
+  ELECTRIC
+  LPG
+  OTHER
+}
+
+enum OwnershipRole {
+  OWNER
+  KEEPER
+}
+
+model Customer {
+  id                   String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  kind                 CustomerKind
+  givenName            String?      @map("given_name")
+  familyName           String?      @map("family_name")
+  companyName          String?      @map("company_name")
+  /// Company Tax Identification Number (optional, J-02).
+  taxId                String?      @map("tax_id")
+  /// Derived by the service from the name fields.
+  displayName          String       @map("display_name")
+  /// lower-case display name for trigram search.
+  searchName           String       @map("search_name")
+  preferredLanguage    String       @default("sw") @map("preferred_language") @db.Char(2)
+  notes                String?
+  createdByStaffUserId String       @map("created_by_staff_user_id")
+  createdBy            StaffUser    @relation("CustomerCreatedBy", fields: [createdByStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt            DateTime?    @map("deleted_at") @db.Timestamptz(3)
+
+  contacts   CustomerContact[]
+  ownerships VehicleOwnership[]
+
+  @@index([searchName(ops: raw("gin_trgm_ops"))], type: Gin, map: "customers_search_name_trgm_idx")
+  @@index([createdAt(sort: Desc)], map: "customers_created_at_idx")
+  @@index([createdByStaffUserId], map: "customers_created_by_idx")
+  @@map("customers")
+}
+
+model CustomerContact {
+  id                String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  customerId        String      @map("customer_id") @db.Uuid
+  customer          Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  kind              ContactKind
+  valueRaw          String      @map("value_raw")
+  /// PHONE: E.164. EMAIL: lower-case. NOT unique across customers (D-05).
+  valueNormalised   String      @map("value_normalised")
+  label             String?
+  contactPersonName String?     @map("contact_person_name")
+  isPrimary         Boolean     @default(false) @map("is_primary")
+  /// Confirms the number for this customer record only. Never an access grant (ADR 0013).
+  verifiedAt        DateTime?   @map("verified_at") @db.Timestamptz(3)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime?   @map("deleted_at") @db.Timestamptz(3)
+
+  @@index([customerId], map: "customer_contacts_customer_idx")
+  @@index([kind, valueNormalised], map: "customer_contacts_lookup_idx")
+  @@map("customer_contacts")
+}
+
+model Vehicle {
+  id                   String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  vinRaw               String?   @map("vin_raw")
+  vinNormalised        String?   @map("vin_normalised")
+  /// For identifiers that are not 17-character VINs (older or imported vehicles).
+  chassisNumber        String?   @map("chassis_number")
+  make                 String
+  model                String?
+  modelYear            Int?      @map("model_year") @db.SmallInt
+  fuelType             FuelType? @map("fuel_type")
+  colour               String?
+  engineNumber         String?   @map("engine_number")
+  /// lower-case "make model" for search.
+  searchText           String    @map("search_text")
+  createdByStaffUserId String    @map("created_by_staff_user_id")
+  createdBy            StaffUser @relation("VehicleCreatedBy", fields: [createdByStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  registrations VehicleRegistration[]
+  ownerships    VehicleOwnership[]
+
+  @@index([vinNormalised], map: "vehicles_vin_idx")
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "vehicles_search_text_trgm_idx")
+  @@index([createdByStaffUserId], map: "vehicles_created_by_idx")
+  @@map("vehicles")
+}
+
+/// Registration (plate) history. A plate is current on one vehicle at a time; a vehicle has one
+/// current plate (exclusion constraints on [valid_from, valid_to)).
+model VehicleRegistration {
+  id                    String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  vehicleId             String    @map("vehicle_id") @db.Uuid
+  vehicle               Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  countryCode           String    @map("country_code") @db.Char(2)
+  plateRaw              String    @map("plate_raw")
+  plateNormalised       String    @map("plate_normalised")
+  validFrom             DateTime  @map("valid_from") @db.Timestamptz(3)
+  validTo               DateTime? @map("valid_to") @db.Timestamptz(3)
+  recordedByStaffUserId String    @map("recorded_by_staff_user_id")
+  recordedBy            StaffUser @relation("RegistrationRecordedBy", fields: [recordedByStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([vehicleId, validFrom(sort: Desc)], map: "vehicle_registrations_vehicle_idx")
+  @@index([plateNormalised(ops: raw("gin_trgm_ops"))], type: Gin, map: "vehicle_registrations_plate_trgm_idx")
+  @@index([recordedByStaffUserId], map: "vehicle_registrations_recorded_by_idx")
+  @@map("vehicle_registrations")
+}
+
+/// Ownership history. At most one OWNER per vehicle at a time (exclusion constraint).
+model VehicleOwnership {
+  id                    String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  vehicleId             String        @map("vehicle_id") @db.Uuid
+  vehicle               Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customerId            String        @map("customer_id") @db.Uuid
+  customer              Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  role                  OwnershipRole
+  startedAt             DateTime      @map("started_at") @db.Timestamptz(3)
+  endedAt               DateTime?     @map("ended_at") @db.Timestamptz(3)
+  /// REGISTRATION | TRANSFER | CORRECTION
+  source                String
+  recordedByStaffUserId String        @map("recorded_by_staff_user_id")
+  recordedBy            StaffUser     @relation("OwnershipRecordedBy", fields: [recordedByStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([vehicleId, startedAt(sort: Desc)], map: "vehicle_ownerships_vehicle_idx")
+  @@index([customerId, startedAt(sort: Desc)], map: "vehicle_ownerships_customer_idx")
+  @@index([recordedByStaffUserId], map: "vehicle_ownerships_recorded_by_idx")
+  @@map("vehicle_ownerships")
+}
+
+/// Fixed-window rate-limit counters (staff sign-in, search). Keys are HMACs — never raw emails/IPs.
+model RateLimitBucket {
+  key         String   @db.VarChar(100)
+  windowStart DateTime @map("window_start") @db.Timestamptz(3)
+  count       Int      @default(0)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([key, windowStart])
+  @@index([expiresAt], map: "rate_limit_buckets_expires_idx")
+  @@map("rate_limit_buckets")
 }

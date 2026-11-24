@@ -18,5 +18,7 @@ ADRs are immutable once accepted — supersede them with a new ADR rather than e
 | 0011 | [Customer identity, guest isolation and verification](0011-customer-identity-and-access.md)      | Accepted (design), amended by 0013 |
 | 0012 | [Append-only audit log](0012-append-only-audit-log.md)                                           | Accepted                           |
 | 0013 | [Portal accounts and explicit per-customer access grants](0013-customer-portal-access-grants.md) | Accepted (design)                  |
+| 0014 | [Dashboard localisation (English default, Kiswahili)](0014-localization.md)                      | Accepted                           |
+| 0015 | [Database-backed rate limiting](0015-rate-limiting.md)                                           | Accepted                           |
 
 Template: copy `0000-template.md`.

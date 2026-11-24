@@ -1,7 +1,7 @@
 # Data dictionary
 
-- **Status:** Phase 1A (2026-11-24)
-- **Part 1** documents every table that **exists** (Phase 0 and 1A): each column, constraint and
+- **Status:** Phase 1B (2026-11-24)
+- **Part 1** documents every table that **exists** (Phase 0, 1A and 1B): each column, constraint and
   index, matching `prisma/schema.prisma` and `prisma/migrations/*`.
 - **Part 2** documents **planned** tables at design level: key columns, keys, constraints and
   indexes. Full column lists are finalised in the phase that creates each table. Each phase's PR
@@ -110,6 +110,122 @@ extended. 1B adds `subject_customer_id` and `subject_vehicle_id` (by value) for 
 ### Enum `"AuditActorType"` (Phase 1A)
 
 `STAFF` · `CUSTOMER` · `SYSTEM`.
+
+### Phase 1B tables (migration `20261124120000_phase_1b_customers_vehicles`)
+
+Extensions: `pg_trgm`, `btree_gist`. Enums: `CustomerKind` (INDIVIDUAL, COMPANY), `ContactKind`
+(PHONE, EMAIL), `FuelType` (PETROL, DIESEL, HYBRID, ELECTRIC, LPG, OTHER), `OwnershipRole`
+(OWNER, KEEPER). All ids `uuid DEFAULT uuidv7()`; timestamps `timestamptz(3)`.
+
+#### `customers`
+
+| Column                      | Type             | Null | Notes                                                |
+| --------------------------- | ---------------- | ---- | ---------------------------------------------------- |
+| `id`                        | `uuid`           | no   | PK                                                   |
+| `kind`                      | `CustomerKind`   | no   |                                                      |
+| `given_name`, `family_name` | `text`           | yes  | INDIVIDUAL: at least one; 1–100 chars each           |
+| `company_name`              | `text`           | yes  | COMPANY: required, 1–200 chars                       |
+| `tax_id`                    | `text`           | yes  | COMPANY only, optional TIN `^[0-9A-Z]{3,20}$` (J-02) |
+| `display_name`              | `text`           | no   | Derived by the service; 1–200 chars                  |
+| `search_name`               | `text`           | no   | CHECK `= lower(display_name)`; GIN trigram index     |
+| `preferred_language`        | `char(2)`        | no   | `sw` (default) or `en`                               |
+| `notes`                     | `text`           | yes  | Staff-only, ≤ 2 000; audited as "changed" only       |
+| `created_by_staff_user_id`  | `text`           | no   | FK → `staff_users` RESTRICT                          |
+| `created_at`, `updated_at`  | `timestamptz(3)` | no   | `updated_at` used for optimistic edits               |
+| `deleted_at`                | `timestamptz(3)` | yes  | Soft delete (archive)                                |
+
+Constraints: `customers_kind_names`, `customers_*_len`, `customers_tax_id_format`,
+`customers_search_name_consistent`, `customers_preferred_language`. Indexes:
+`customers_search_name_trgm_idx` (GIN), `customers_created_at_idx`, `customers_created_by_idx`.
+
+#### `customer_contacts`
+
+| Column                                   | Type             | Null | Notes                                                                   |
+| ---------------------------------------- | ---------------- | ---- | ----------------------------------------------------------------------- |
+| `id`                                     | `uuid`           | no   | PK                                                                      |
+| `customer_id`                            | `uuid`           | no   | FK → `customers` CASCADE                                                |
+| `kind`                                   | `ContactKind`    | no   |                                                                         |
+| `value_raw`                              | `text`           | no   | As entered, 1–254 chars                                                 |
+| `value_normalised`                       | `text`           | no   | PHONE: E.164; EMAIL: lower-case. **Not unique across customers** (D-05) |
+| `label`, `contact_person_name`           | `text`           | yes  | ≤ 50 / ≤ 100 chars                                                      |
+| `is_primary`                             | `boolean`        | no   |                                                                         |
+| `verified_at`                            | `timestamptz(3)` | yes  | Never an access grant (ADR 0013)                                        |
+| `created_at`, `updated_at`, `deleted_at` | `timestamptz(3)` |      | Soft delete                                                             |
+
+Constraints: `customer_contacts_value_format`, length checks, **EXCLUDE**
+`customer_contacts_one_primary (customer_id =, kind =) WHERE is_primary AND deleted_at IS NULL`,
+**EXCLUDE** `customer_contacts_no_duplicate (customer_id =, kind =, value_normalised =) WHERE
+deleted_at IS NULL`. Indexes: `customer_contacts_customer_idx`, `customer_contacts_lookup_idx
+(kind, value_normalised)`.
+
+#### `vehicles`
+
+| Column                                   | Type             | Null | Notes                                                   |
+| ---------------------------------------- | ---------------- | ---- | ------------------------------------------------------- |
+| `id`                                     | `uuid`           | no   | PK                                                      |
+| `vin_raw`, `vin_normalised`              | `text`           | yes  | Both or neither; `^[A-HJ-NPR-Z0-9]{17}$`                |
+| `chassis_number`, `engine_number`        | `text`           | yes  | ≤ 30 chars                                              |
+| `make`                                   | `text`           | no   | 1–60 chars                                              |
+| `model`, `colour`                        | `text`           | yes  |                                                         |
+| `model_year`                             | `smallint`       | yes  | 1900–2100 in DB; app enforces 1950–next year            |
+| `fuel_type`                              | `FuelType`       | yes  |                                                         |
+| `search_text`                            | `text`           | no   | CHECK `= lower(btrim(make ‖ ' ' ‖ model))`; GIN trigram |
+| `created_by_staff_user_id`               | `text`           | no   | FK → `staff_users` RESTRICT                             |
+| `created_at`, `updated_at`, `deleted_at` | `timestamptz(3)` |      | Archive ends current plate and ownerships               |
+
+Constraints: `vehicles_vin_format`, `vehicles_vin_pair`, length/year checks,
+`vehicles_search_text_consistent`, **EXCLUDE** `vehicles_vin_unique_active (vin_normalised =)
+WHERE vin_normalised IS NOT NULL AND deleted_at IS NULL`.
+
+#### `vehicle_registrations` (plate history)
+
+| Column                      | Type             | Null | Notes                                                           |
+| --------------------------- | ---------------- | ---- | --------------------------------------------------------------- |
+| `id`                        | `uuid`           | no   | PK                                                              |
+| `vehicle_id`                | `uuid`           | no   | FK → `vehicles` RESTRICT                                        |
+| `country_code`              | `char(2)`        | no   | From `garage_profile` (TZ)                                      |
+| `plate_raw`                 | `text`           | no   | Display form                                                    |
+| `plate_normalised`          | `text`           | no   | `^[A-Z0-9]{2,12}$`; GIN trigram. Format **warning-only** (J-03) |
+| `valid_from`                | `timestamptz(3)` | no   |                                                                 |
+| `valid_to`                  | `timestamptz(3)` | yes  | NULL = current; CHECK `> valid_from`                            |
+| `recorded_by_staff_user_id` | `text`           | no   | FK → `staff_users` RESTRICT                                     |
+
+**EXCLUDE** `vehicle_registrations_plate_no_overlap (country_code =, plate_normalised =,
+tstzrange(valid_from, valid_to) &&)`, **EXCLUDE** `vehicle_registrations_vehicle_no_overlap
+(vehicle_id =, tstzrange(...) &&)`.
+
+#### `vehicle_ownerships`
+
+| Column                      | Type             | Null | Notes                                            |
+| --------------------------- | ---------------- | ---- | ------------------------------------------------ |
+| `id`                        | `uuid`           | no   | PK                                               |
+| `vehicle_id`                | `uuid`           | no   | FK → `vehicles` RESTRICT                         |
+| `customer_id`               | `uuid`           | no   | FK → `customers` RESTRICT                        |
+| `role`                      | `OwnershipRole`  | no   | OWNER (legal/billing) or KEEPER (regular driver) |
+| `started_at`                | `timestamptz(3)` | no   |                                                  |
+| `ended_at`                  | `timestamptz(3)` | yes  | NULL = current; CHECK `> started_at`             |
+| `source`                    | `text`           | no   | `REGISTRATION`, `TRANSFER`, `CORRECTION`         |
+| `recorded_by_staff_user_id` | `text`           | no   | FK → `staff_users` RESTRICT                      |
+
+**EXCLUDE** `vehicle_ownerships_one_owner (vehicle_id =, tstzrange(started_at, ended_at) &&)
+WHERE role = 'OWNER'`; **EXCLUDE** `vehicle_ownerships_keeper_no_overlap (vehicle_id =,
+customer_id =, range &&) WHERE role = 'KEEPER'`.
+
+#### `rate_limit_buckets` (ADR 0015)
+
+| Column         | Type             | Notes                                          |
+| -------------- | ---------------- | ---------------------------------------------- |
+| `key`          | `varchar(100)`   | `<rule>:<HMAC>`; never a raw email/IP. PK part |
+| `window_start` | `timestamptz(3)` | PK part                                        |
+| `count`        | `integer`        | CHECK ≥ 0                                      |
+| `expires_at`   | `timestamptz(3)` | CHECK `> window_start`; indexed for cleanup    |
+
+#### `audit_logs` additions (Phase 1B)
+
+`subject_customer_id uuid NULL`, `subject_vehicle_id uuid NULL` (by value, ADR 0012), with indexes
+`audit_logs_subject_customer_idx` and `audit_logs_subject_vehicle_idx` (`…, occurred_at DESC`). They
+feed the customer/vehicle activity timelines. Ownership transfers write one row per timeline, so
+neither row names the other customer.
 
 ### `_prisma_migrations`
 

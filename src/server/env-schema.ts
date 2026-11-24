@@ -38,6 +38,10 @@ export const serverEnvSchema = z
       .optional()
       .transform((v) => v === "true"),
 
+    /** Staff sign-in attempts allowed per 15 minutes, per email and per client IP. */
+    AUTH_RATE_LIMIT_PER_EMAIL: z.coerce.number().int().min(1).max(1000).default(10),
+    AUTH_RATE_LIMIT_PER_IP: z.coerce.number().int().min(1).max(100000).default(50),
+
     /** Set by Next.js; secrets are not needed while compiling, only when serving requests. */
     NEXT_PHASE: z.string().optional(),
   })

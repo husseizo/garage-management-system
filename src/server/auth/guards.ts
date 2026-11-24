@@ -2,6 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
+import { can, type Permission } from "@/modules/staff/permissions";
 import { hasRole, isStaffRole, type StaffRole } from "@/modules/staff/roles";
 
 import { AppError } from "../errors/app-error";
@@ -49,6 +50,25 @@ export async function assertStaff(roles?: readonly StaffRole[]): Promise<StaffSe
   const staff = await getStaffSession();
   if (!staff) throw new AppError("UNAUTHENTICATED", "Please sign in to continue.");
   if (!hasRole(staff.role, roles)) {
+    throw new AppError("FORBIDDEN", "You do not have permission to perform this action.");
+  }
+  return staff;
+}
+
+/** Page guard by permission: redirects like `requireStaff`, then checks the permission. */
+export async function requirePermission(
+  permission: Permission,
+  options: { returnTo?: string } = {},
+): Promise<StaffSession> {
+  const staff = await requireStaff(options);
+  if (!can(staff.role, permission)) redirect(`${STAFF_HOME}?denied=1`);
+  return staff;
+}
+
+/** Data guard by permission for server actions and queries. Throws 401/403 `AppError`s. */
+export async function assertPermission(permission: Permission): Promise<StaffSession> {
+  const staff = await assertStaff();
+  if (!can(staff.role, permission)) {
     throw new AppError("FORBIDDEN", "You do not have permission to perform this action.");
   }
   return staff;

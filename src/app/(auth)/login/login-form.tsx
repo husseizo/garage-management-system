@@ -7,10 +7,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/i18n/client";
 
 import { signInAction, type SignInState } from "./actions";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
+  const t = useT();
   const [state, formAction, pending] = useActionState<SignInState, FormData>(signInAction, {});
 
   return (
@@ -18,16 +20,16 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       {state.error ? (
         <Alert variant="destructive" role="alert">
           <AlertCircle aria-hidden />
-          <AlertDescription>{state.error}</AlertDescription>
+          <AlertDescription>{t(state.error)}</AlertDescription>
         </Alert>
       ) : null}
       {callbackUrl ? <input type="hidden" name="callbackUrl" value={callbackUrl} /> : null}
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t("auth.email")}</Label>
         <Input id="email" name="email" type="email" autoComplete="username" required />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">{t("auth.password")}</Label>
         <Input
           id="password"
           name="password"
@@ -38,7 +40,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       </div>
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
-        Sign in
+        {t("auth.signIn")}
       </Button>
     </form>
   );

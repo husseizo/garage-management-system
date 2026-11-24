@@ -10,6 +10,11 @@ const DASHBOARD_ROUTES = [
   "/dashboard/service-bays",
   "/dashboard/reminders",
   "/dashboard/settings",
+  "/dashboard/customers/new",
+  "/dashboard/customers/018f0000-0000-7000-8000-000000000000",
+  "/dashboard/vehicles/new",
+  "/dashboard/vehicles/018f0000-0000-7000-8000-000000000000",
+  "/dashboard/search",
 ];
 
 for (const path of DASHBOARD_ROUTES) {
