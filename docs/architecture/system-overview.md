@@ -74,9 +74,9 @@ URL and rejects `-pooler` hosts. `scripts/db-guard.ts` runs before every `db:mig
 `ALLOW_PRODUCTION_DB_WRITES=true`. `checkDatabase()` runs `SELECT 1` with a 5 s timeout and returns
 only `ok | unconfigured | error`.
 
-Phase 0 schema: `staff_users` only. Planned Phase 1 entities: `Customer`, `Vehicle`, `Booking`,
-`BookingService`, `ServiceType`, `ServiceBay`, `Technician`, `TechnicianSkill`, `Shift`,
-`Appointment`, `ReminderRule`, `Reminder`, `NotificationOutbox`, `ConsentRecord`, `AuditLog`.
+Current schema: `staff_users` (Phase 0), `garage_profile` and `audit_logs` (Phase 1A). The complete
+domain model (all planned modules), ERD, data dictionary, business rules, scheduling concurrency
+design and migration roadmap are in [`database/`](database/domain-model.md); see ADRs 0008–0012.
 
 ## 4. Authentication strategy
 
