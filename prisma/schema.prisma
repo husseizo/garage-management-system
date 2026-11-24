@@ -1,0 +1,35 @@
+// Garage Management System — Prisma schema.
+//
+// Phase 0 contains ONLY the staff identity table required for dashboard authentication.
+// Business entities (customers, vehicles, bookings, bays, technicians, reminders) arrive in
+// Phase 1 via reviewed, additive migrations.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StaffRole {
+  OWNER
+  MANAGER
+  SERVICE_ADVISOR
+  TECHNICIAN
+}
+
+model StaffUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String    @map("password_hash")
+  role         StaffRole @default(SERVICE_ADVISOR)
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("staff_users")
+}
