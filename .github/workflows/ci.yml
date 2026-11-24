@@ -2,7 +2,8 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
+    # feature/** so stacked PRs (e.g. Phase 0.2 onto Phase 0) are checked too.
+    branches: [main, develop, "feature/**"]
   push:
     branches: [main, develop]
 

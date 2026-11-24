@@ -57,10 +57,22 @@ docs/                  architecture, ADRs, progress reports
 
 ## 3. Database integration
 
-See ADR 0003. Prisma schema in `prisma/schema.prisma`; CLI config in `prisma.config.ts`
-(`DIRECT_URL` for migrations). Runtime client `getDb()` in `src/server/db/client.ts` uses
-`DATABASE_URL` (pooled) through `@prisma/adapter-neon`, created lazily and cached across hot reloads.
-`checkDatabase()` runs `SELECT 1` with a 5 s timeout and returns only `ok | unconfigured | error`.
+See ADR 0003 and `docs/progress/phase-0.2-neon-integration.md`. Neon project `quiet-violet-31193699`
+(region aws-eu-central-1), linked via the Neon CLI and `neon.ts`. Branches: `production` (default,
+untouched by local tooling) and `development` (local work, migrations, test accounts).
+
+| Concern           | Connection                             | Where                     |
+| ----------------- | -------------------------------------- | ------------------------- |
+| App runtime       | `DATABASE_URL` — pooled (PgBouncer)    | `src/server/db/client.ts` |
+| Prisma migrations | `DIRECT_URL` → `DATABASE_URL_UNPOOLED` | `prisma.config.ts`        |
+| Safety rules      | `NEON_BRANCH`, `NODE_ENV`              | `src/server/db/target.ts` |
+
+One runtime client: `getDb()` builds a single `PrismaClient` over `@prisma/adapter-neon`, lazily,
+cached on `globalThis` across hot reloads. `resolveMigrationUrl()` never falls back to the pooled
+URL and rejects `-pooler` hosts. `scripts/db-guard.ts` runs before every `db:migrate:*` script, and
+`staff:create` applies the same check, refusing production branch names unless the owner sets
+`ALLOW_PRODUCTION_DB_WRITES=true`. `checkDatabase()` runs `SELECT 1` with a 5 s timeout and returns
+only `ok | unconfigured | error`.
 
 Phase 0 schema: `staff_users` only. Planned Phase 1 entities: `Customer`, `Vehicle`, `Booking`,
 `BookingService`, `ServiceType`, `ServiceBay`, `Technician`, `TechnicianSkill`, `Shift`,

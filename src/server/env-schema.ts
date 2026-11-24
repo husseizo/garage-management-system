@@ -23,8 +23,12 @@ export const serverEnvSchema = z
 
     /** Pooled Neon connection string used by the application at runtime. */
     DATABASE_URL: optionalUrl,
-    /** Direct (unpooled) Neon connection string used by Prisma migrations. */
+    /** Direct (unpooled) Neon connection string used by Prisma migrations (legacy name). */
     DIRECT_URL: optionalUrl,
+    /** Direct (unpooled) Neon connection string as written by `neon env pull`. */
+    DATABASE_URL_UNPOOLED: optionalUrl,
+    /** Neon branch the connection strings belong to (written by `neon env pull`). */
+    NEON_BRANCH: z.string().trim().optional(),
 
     /** Auth.js secret used to encrypt session tokens. Generate with `npx auth secret`. */
     AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters").optional(),

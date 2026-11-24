@@ -16,13 +16,14 @@
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
-    "db:migrate:dev": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:dev": "tsx scripts/db-guard.ts \"run prisma migrate dev\" && prisma migrate dev",
+    "db:migrate:deploy": "tsx scripts/db-guard.ts \"run prisma migrate deploy\" && prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
     "db:studio": "prisma studio",
     "staff:create": "tsx scripts/create-staff-user.ts",
     "postinstall": "prisma generate",
-    "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build"
+    "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
+    "db:guard": "tsx scripts/db-guard.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.2.1",
@@ -41,6 +42,8 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@neon/config": "1.14.6",
+    "@neon/env": "2.1.9",
     "@playwright/test": "1.65.1",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^22",

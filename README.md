@@ -26,7 +26,7 @@ Exact versions and rationale: [ADR 0002](docs/decisions/0002-toolchain-and-versi
 
 - **Node.js 22 LTS** (see `.nvmrc`). Prisma 7 does not run on Node 23.
 - npm 10+
-- A Neon project with a `development` branch (optional for UI work).
+- A Neon project with a `development` branch and the Neon CLI (optional for UI work).
 
 ### Setup
 
@@ -43,30 +43,39 @@ Without `DATABASE_URL` the app still runs: public pages work, `/api/health` repo
 
 ### Connecting Neon (development branch)
 
-1. In the Neon console, open the project → **Branches** → use or create `development`.
-2. **Connect** → copy the **pooled** connection string into `DATABASE_URL` and the **direct**
-   (non-pooled) string into `DIRECT_URL` in `.env`.
-3. Apply migrations to the development branch and create the first staff account:
+The Neon project is linked with the Neon CLI (`neon.ts` is committed; the local `.neon` context
+file is git-ignored). Local work always uses the **`development`** branch, never `production`.
 
 ```bash
-npm run db:migrate:deploy
+npm i -g neon@latest             # Neon CLI
+neon login                       # browser sign-in (do not paste tokens anywhere)
+neon checkout development        # pin the development branch in .neon
+neon env pull --branch development   # writes DATABASE_URL, DATABASE_URL_UNPOOLED, NEON_BRANCH… to .env
+npm run db:guard                 # confirms the target is not a production branch
+npm run db:migrate:deploy        # applies committed migrations (guarded)
 npm run staff:create -- --email you@example.test --name "Your Name" --role OWNER
+curl localhost:3000/api/health   # → "database": { "status": "ok" }
 ```
 
-4. Check connectivity: `curl localhost:3000/api/health` → `"database": { "status": "ok" }`.
-
-Never point local tooling at the production branch.
+Safety rails: `db:migrate:*` and `staff:create` refuse to run when `NEON_BRANCH` is `production`,
+`prod` or `main`, or when `NODE_ENV=production` (override only with `ALLOW_PRODUCTION_DB_WRITES=true`
+and owner approval). Migrations never fall back to the pooled URL. Branch strategy and procedure:
+[`docs/progress/phase-0.2-neon-integration.md`](docs/progress/phase-0.2-neon-integration.md).
 
 ## Environment variables
 
-| Variable          | Required          | Purpose                                        |
-| ----------------- | ----------------- | ---------------------------------------------- |
-| `DATABASE_URL`    | for DB features   | Neon **pooled** connection string (runtime)    |
-| `DIRECT_URL`      | for migrations    | Neon **direct** connection string (Prisma CLI) |
-| `AUTH_SECRET`     | yes in production | Auth.js session encryption secret (≥32 chars)  |
-| `AUTH_URL`        | deployed envs     | Public base URL                                |
-| `AUTH_TRUST_HOST` | optional          | `true` only behind a trusted proxy             |
-| `LOG_LEVEL`       | optional          | `info` by default                              |
+| Variable                     | Required          | Purpose                                                          |
+| ---------------------------- | ----------------- | ---------------------------------------------------------------- |
+| `DATABASE_URL`               | for DB features   | Neon **pooled** (`-pooler`) connection string — app runtime      |
+| `DATABASE_URL_UNPOOLED`      | for migrations    | Neon **direct** connection string — Prisma CLI (`neon env pull`) |
+| `DIRECT_URL`                 | optional          | Legacy name for the direct string; overrides the above if set    |
+| `NEON_BRANCH`                | recommended       | Neon branch name; production names block migrations              |
+| `NEON_BRANCH_ID`             | informational     | Written by `neon env pull`                                       |
+| `AUTH_SECRET`                | yes in production | Auth.js session encryption secret (≥32 chars)                    |
+| `AUTH_URL`                   | deployed envs     | Public base URL                                                  |
+| `AUTH_TRUST_HOST`            | optional          | `true` only behind a trusted proxy                               |
+| `LOG_LEVEL`                  | optional          | `info` by default                                                |
+| `ALLOW_PRODUCTION_DB_WRITES` | never by default  | Owner-approved override for the production guard                 |
 
 All variables are validated at startup by `src/server/env-schema.ts`.
 
@@ -81,10 +90,12 @@ All variables are validated at startup by `src/server/env-schema.ts`.
 | `npm run format` / `format:check` | Prettier                                               |
 | `npm test`                        | Vitest unit + integration                              |
 | `npm run test:e2e`                | Playwright (requires `npm run build` first)            |
+| `E2E_DATABASE=1 npm run test:e2e` | Playwright incl. signed-in tests against `development` |
 | `npm run validate`                | Typecheck, lint, format check, tests, build            |
 | `npm run db:migrate:dev`          | Create/apply a migration on the **development** branch |
 | `npm run db:migrate:deploy`       | Apply committed migrations                             |
 | `npm run db:migrate:status`       | Show migration status                                  |
+| `npm run db:guard`                | Check the DB target is a non-production branch         |
 | `npm run staff:create`            | Create or reset a staff account (dev only)             |
 
 ## Project structure

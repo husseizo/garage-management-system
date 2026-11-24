@@ -38,6 +38,8 @@ test("health endpoint exposes no infrastructure details", async ({ request }) =>
   const res = await request.get("/api/health");
   expect(res.status()).toBe(200);
   const body = await res.json();
-  expect(body.checks.database.status).toBe("unconfigured");
+  expect(body.checks.database.status).toBe(
+    process.env.E2E_DATABASE === "1" ? "ok" : "unconfigured",
+  );
   expect(JSON.stringify(body)).not.toMatch(/postgres|password|neon\.tech/i);
 });
