@@ -24,7 +24,9 @@
     "garage:profile": "tsx scripts/set-garage-profile.ts",
     "postinstall": "prisma generate",
     "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
-    "db:guard": "tsx scripts/db-guard.ts"
+    "db:guard": "tsx scripts/db-guard.ts",
+    "db:dry-run": "tsx scripts/db-dry-run.ts",
+    "db:verify-ci": "tsx scripts/verify-ci-target.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.2.1",
@@ -32,6 +34,7 @@
     "@prisma/client": "7.10.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
+    "libphonenumber-js": "1.13.17",
     "lucide-react": "^1.78.0",
     "next": "16.4.6",
     "next-auth": "5.0.0-beta.32",

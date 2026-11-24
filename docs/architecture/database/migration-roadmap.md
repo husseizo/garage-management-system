@@ -48,7 +48,12 @@ Why only these two: both are needed by 1B and every later phase. `garage_profile
 the default region for phone normalisation, and every customer/vehicle mutation must write an
 audit row in the same transaction. Nothing else is created early.
 
-## Phase 1B — customer and vehicle management
+## Phase 1B — customer and vehicle management ✅ (implemented, PR pending)
+
+Implemented as migration `20261124120000_phase_1b_customers_vehicles` (see the data dictionary,
+Part 1). Differences from the plan: `customer_merges` deferred (J-01), `rate_limit_buckets` added
+(ADR 0015), and uniqueness "among active rows" implemented as btree exclusion constraints, which
+Prisma does not try to manage.
 
 Detailed plan for owner review: [`docs/progress/phase-1b-plan.md`](../../progress/phase-1b-plan.md).
 Owner decisions D-01–D-07 (`domain-model.md` §6.1) apply: `INDIVIDUAL`/`COMPANY` customers, shared

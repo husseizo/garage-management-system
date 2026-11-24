@@ -83,10 +83,12 @@ describe.skipIf(!enabled)("Phase 1A schema (development branch, rolled back)", (
       const { rows } = await c.query<{ name: string }>(
         "select migration_name as name from _prisma_migrations where finished_at is not null order by 1",
       );
-      expect(rows.map((r) => r.name)).toEqual([
-        "20261123000000_init_staff_users",
-        "20261124000000_phase_1a_platform_foundation",
-      ]);
+      expect(rows.map((r) => r.name)).toEqual(
+        expect.arrayContaining([
+          "20261123000000_init_staff_users",
+          "20261124000000_phase_1a_platform_foundation",
+        ]),
+      );
       const ver = await c.query<{ v: number }>(
         "select current_setting('server_version_num')::int v",
       );
