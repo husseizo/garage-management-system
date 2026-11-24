@@ -91,9 +91,13 @@ profile → build → Playwright in DB mode. It runs one at a time and is skippe
 secrets exist. The `quality` job no longer reads `NEON_DEV_DATABASE_URL`, so `development` is never
 used by CI.
 
-**Not done (requires owner confirmation):** creating the `ci-testing` branch and the GitHub
-secrets `NEON_CI_DATABASE_URL` / `NEON_CI_DATABASE_URL_UNPOOLED`. Steps:
-`docs/operations/ci-database.md`. Until then, live-database tests run locally only.
+**Follow-up (owner-approved, 2026-11-24):** the `ci-testing` branch was created
+(`br-dawn-lake-bgrg54n5`, endpoint `ep-nameless-grass-bg6ppo3o`, parent `production`, no expiry).
+Isolation was verified, all migrations were applied, and live integration tests ran 35/35 with no
+rows left behind. The run exposed and fixed a test-design gap: schema tests assumed an existing staff
+account, so they now create their own fixtures. **Remaining owner action:** add the two GitHub secrets
+(`docs/operations/ci-database.md`, piped commands, values never displayed). Until then the CI
+`database` job is skipped.
 
 ## 6. Development data created
 

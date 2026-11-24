@@ -15,13 +15,14 @@ describe.skipIf(!enabled)("Phase 1B schema (development branch, rolled back)", (
   let pool: Pool;
   let staffId: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     pool = new Pool({ connectionString: url });
-    const { rows } = await pool.query<{ id: string }>(
-      "select id from staff_users order by created_at limit 1",
-    );
-    staffId = rows[0]!.id;
   });
+
+  /** Self-contained staff fixture (fresh CI branches have no staff accounts). */
+  const STAFF_FIXTURE_SQL = `insert into staff_users (id, email, name, password_hash, updated_at)
+    values ('it-' || gen_random_uuid(), 'it-' || gen_random_uuid() || '@example.test', 'IT Staff', 'x', now())
+    returning id`;
   afterAll(async () => {
     await pool?.end();
   });
@@ -30,6 +31,7 @@ describe.skipIf(!enabled)("Phase 1B schema (development branch, rolled back)", (
     const c = await pool.connect();
     try {
       await c.query("BEGIN");
+      staffId = (await c.query<{ id: string }>(STAFF_FIXTURE_SQL)).rows[0]!.id;
       await fn(c);
     } finally {
       await c.query("ROLLBACK");
@@ -335,6 +337,7 @@ describe.skipIf(!enabled)("Phase 1B schema (development branch, rolled back)", (
       const b = await pool.connect();
       try {
         await a.query("BEGIN");
+        staffId = (await a.query<{ id: string }>(STAFF_FIXTURE_SQL)).rows[0]!.id;
         const v = await vehicle(a);
         const c1 = await customer(a, "Race A");
         const c2 = await customer(a, "Race B");
@@ -371,6 +374,7 @@ describe.skipIf(!enabled)("Phase 1B schema (development branch, rolled back)", (
           await a.query("delete from vehicle_ownerships where vehicle_id = $1", [v]);
           await a.query("delete from vehicles where id = $1", [v]);
           await a.query("delete from customers where id = any($1::uuid[])", [[c1, c2]]);
+          await a.query("delete from staff_users where id = $1", [staffId]);
         }
       } finally {
         a.release();

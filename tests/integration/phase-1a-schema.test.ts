@@ -173,7 +173,11 @@ describe.skipIf(!enabled)("Phase 1A schema (development branch, rolled back)", (
         "23514",
         "audit_logs_staff_actor_consistent",
       );
-      const staff = await c.query<{ id: string }>("select id from staff_users limit 1");
+      const staff = await c.query<{ id: string }>(
+        `insert into staff_users (id, email, name, password_hash, updated_at)
+         values ('it-' || gen_random_uuid(), 'it-' || gen_random_uuid() || '@example.test', 'IT', 'x', now())
+         returning id`,
+      );
       await expectFailure(
         c,
         "insert into audit_logs (actor_type, actor_staff_user_id, action) values ('SYSTEM', $1, 'job.ran')",

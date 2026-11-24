@@ -2,9 +2,14 @@
 
 - **Owner decision J-05:** CI runs live-database tests on a **dedicated** Neon branch,
   `ci-testing`. CI never uses `development` (local work) or `production`.
-- **Status:** CI configuration is ready (`.github/workflows/ci.yml`, job `database`). **The branch and
-  the GitHub secrets have NOT been created.** Until they exist, the job reports "skipped" (a notice,
-  not a failure), and live-database suites are reported as skipped, never passed.
+- **Status (2026-11-24):** branch **created** with owner approval:
+  `ci-testing` (`br-dawn-lake-bgrg54n5`), endpoint `ep-nameless-grass-bg6ppo3o`, parent `production`
+  (`br-still-bar-bgjl83o4`), **no expiry**. Isolation verified: it started with no tables, and its
+  endpoint differs from `development` (`ep-rapid-lake-bgk09wmz`) and `production`
+  (`ep-winter-cake-bg5s9xnm`). All three migrations applied, drift check clean, live integration
+  tests 35/35, and no rows left behind.
+- **Still required (owner):** the two GitHub secrets below. Until they exist, the CI `database`
+  job is skipped with a notice (not a failure).
 
 ## Why a separate branch
 
@@ -18,37 +23,32 @@
 
 ## One-time setup (owner)
 
-1. **Create the branch** (from `production`, which has no data):
+1. ~~Create the branch~~ — done (see Status). Recreating it, if ever needed:
+   `neon branches create --project-id quiet-violet-31193699 --name ci-testing --parent production`
+   (not `neon checkout --create`, because the `neon.ts` policy would add a 7-day expiry).
+
+2. **Add the GitHub Actions secrets.** Pipe the values straight from the Neon CLI into the GitHub
+   CLI so they are never displayed or pasted:
 
    ```bash
-   neon branches create --project-id quiet-violet-31193699 --name ci-testing --parent production
+   neon connection-string ci-testing --project-id quiet-violet-31193699 --database-name neondb --pooled | gh secret set NEON_CI_DATABASE_URL --repo husseizo/garage-management-system
    ```
-
-   Do not use `neon checkout ci-testing --create`: the `neon.ts` policy would give it a 7-day
-   expiry.
-
-2. **Get its connection strings** (pooled and direct). Do not paste them into chat, issues or
-   commits:
 
    ```bash
-   neon connection-string ci-testing --project-id quiet-violet-31193699 --pooled
-   neon connection-string ci-testing --project-id quiet-violet-31193699
+   neon connection-string ci-testing --project-id quiet-violet-31193699 --database-name neondb | gh secret set NEON_CI_DATABASE_URL_UNPOOLED --repo husseizo/garage-management-system
    ```
-
-3. **Add GitHub Actions repository secrets** (Settings → Secrets and variables → Actions):
 
    | Secret                          | Value                                                    |
    | ------------------------------- | -------------------------------------------------------- |
    | `NEON_CI_DATABASE_URL`          | `ci-testing` **pooled** string (host contains `-pooler`) |
    | `NEON_CI_DATABASE_URL_UNPOOLED` | `ci-testing` **direct** string                           |
 
-   Recommended: a dedicated Neon role for CI (`neon roles create --branch ci-testing --name ci_runner`)
-   so the credential can be rotated without affecting `development`.
+   Optional hardening: a dedicated Neon role for CI so it can be rotated independently of
+   `neondb_owner`.
 
-4. Re-run CI on any PR. The `database` job then runs:
-   `db:verify-ci` → `db:migrate:deploy` → integration tests → creates **ephemeral** staff accounts
-   (random passwords generated in the job and masked; nothing stored in the repo) → sets the MAPESA
-   GARAGE profile → build → Playwright with `E2E_DATABASE=1`.
+3. Re-run CI on the open PR. The `database` job then runs:
+   `db:verify-ci` → `db:migrate:deploy` → integration tests → ephemeral staff accounts (random,
+   masked passwords) → MAPESA GARAGE profile → build → Playwright with `E2E_DATABASE=1`.
 
 ## Maintenance
 

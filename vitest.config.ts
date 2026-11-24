@@ -21,7 +21,12 @@ export default defineConfig({
       { extends: true, test: { name: "unit", include: ["tests/unit/**/*.test.ts"] } },
       {
         extends: true,
-        test: { name: "integration", include: ["tests/integration/**/*.test.ts"] },
+        test: {
+          name: "integration",
+          include: ["tests/integration/**/*.test.ts"],
+          // Live Neon tests: allow for cold-start latency of a suspended compute.
+          testTimeout: 30_000,
+        },
       },
     ],
   },
