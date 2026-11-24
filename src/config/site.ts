@@ -1,10 +1,14 @@
 /**
- * Neutral branding placeholders. Replace once the garage supplies its official name, logo and
- * colours (colours live as design tokens in `src/app/globals.css`).
+ * Official branding confirmed by the owner (2026-11-24). Logo and brand colours have not been
+ * supplied, so the neutral icon and design tokens (`src/app/globals.css`) remain. Contact details
+ * and address are intentionally absent until the owner provides them.
  */
 export const siteConfig = {
-  name: "Garage Management System",
-  shortName: "GMS",
+  /** Official business name. */
+  name: "MAPESA GARAGE",
+  /** Name of the software product (staff-facing). */
+  systemName: "MAPESA GARAGE Management System",
+  shortName: "MAPESA",
   description:
     "Servicing, mechanical repairs, diagnostics, bodywork and paint — book online and track your vehicle.",
   services: [

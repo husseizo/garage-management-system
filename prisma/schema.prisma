@@ -1,8 +1,8 @@
 // Garage Management System — Prisma schema.
 //
-// Phase 0 contains ONLY the staff identity table required for dashboard authentication.
-// Business entities (customers, vehicles, bookings, bays, technicians, reminders) arrive in
-// Phase 1 via reviewed, additive migrations.
+// Phase 0: staff identity for dashboard authentication. Phase 1A: shared platform foundation
+// (garage profile, audit log). Business entities arrive in later phases via reviewed, additive
+// migrations — see docs/architecture/database/migration-roadmap.md.
 
 generator client {
   provider = "prisma-client"
@@ -31,5 +31,69 @@ model StaffUser {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
+  auditLogs AuditLog[]
+
   @@map("staff_users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1A — shared platform foundation (docs/architecture/database/*, ADRs 0008–0012).
+// New tables use PostgreSQL 18 `uuidv7()` keys and `timestamptz`. CHECK constraints and the
+// append-only trigger live in the migration SQL (Prisma does not model them).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Singleton garage configuration (exactly one row, enforced by `singleton`).
+model GarageProfile {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Always true; the UNIQUE constraint on it allows at most one row.
+  singleton        Boolean  @unique @default(true)
+  displayName      String   @map("display_name")
+  legalName        String?  @map("legal_name")
+  /// ISO 3166-1 alpha-2, e.g. "TZ". Default region for phone-number normalisation.
+  countryCode      String   @map("country_code") @db.Char(2)
+  /// IANA time zone, e.g. "Africa/Dar_es_Salaam".
+  timezone         String
+  /// ISO 4217, e.g. "TZS".
+  currencyCode     String   @map("currency_code") @db.Char(3)
+  /// E.164, e.g. "+255712345678".
+  contactPhoneE164 String?  @map("contact_phone_e164")
+  contactEmail     String?  @map("contact_email")
+  addressLine1     String?  @map("address_line1")
+  addressLine2     String?  @map("address_line2")
+  city             String?
+  region           String?
+  postalCode       String?  @map("postal_code")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("garage_profile")
+}
+
+enum AuditActorType {
+  STAFF
+  CUSTOMER
+  SYSTEM
+}
+
+/// Append-only audit trail. UPDATE and DELETE are rejected by a database trigger.
+/// `entity_type`/`entity_id` reference rows by value on purpose (ADR 0012).
+model AuditLog {
+  id               String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  occurredAt       DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorType        AuditActorType @map("actor_type")
+  actorStaffUserId String?        @map("actor_staff_user_id")
+  actorStaffUser   StaffUser?     @relation(fields: [actorStaffUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Dotted verb, e.g. "garage_profile.updated", "staff.sign_in".
+  action           String
+  entityType       String?        @map("entity_type")
+  entityId         String?        @map("entity_id")
+  /// Redacted before/after field values. Never secrets, hashes or full contact details.
+  changes          Json?          @db.JsonB
+  metadata         Json?          @db.JsonB
+  requestId        String?        @map("request_id")
+
+  @@index([entityType, entityId, occurredAt(sort: Desc)], map: "audit_logs_entity_idx")
+  @@index([actorStaffUserId, occurredAt(sort: Desc)], map: "audit_logs_actor_staff_idx")
+  @@index([action, occurredAt(sort: Desc)], map: "audit_logs_action_idx")
+  @@map("audit_logs")
 }

@@ -6,10 +6,14 @@ import { DashboardMobileNav } from "@/components/layout/dashboard-mobile-nav";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { UserMenu } from "@/components/layout/user-menu";
 import { visibleNav } from "@/config/navigation";
+import { siteConfig } from "@/config/site";
 import { requireStaff } from "@/server/auth/guards";
 
 export const metadata: Metadata = {
-  title: { default: "Dashboard", template: "%s · Dashboard" },
+  title: {
+    default: `Dashboard · ${siteConfig.systemName}`,
+    template: `%s · ${siteConfig.systemName}`,
+  },
   robots: { index: false, follow: false },
 };
 
