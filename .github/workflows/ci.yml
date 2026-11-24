@@ -34,11 +34,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
+      # No database here: live-database suites are skipped (reported as skipped) and run in the
+      # `database` job against the dedicated Neon `ci-testing` branch instead.
       - name: Unit and integration tests
         run: npm test
-        env:
-          # Optional: set repository secret NEON_DEV_DATABASE_URL to run the live Neon check.
-          DATABASE_URL: ${{ secrets.NEON_DEV_DATABASE_URL }}
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
@@ -69,5 +68,85 @@ jobs:
         if: failure()
         with:
           name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────────────────────
+  # Live-database tests on the dedicated Neon `ci-testing` branch (owner decision J-05).
+  # Never the `development` or `production` branch. Skipped (not failed) until the owner adds the
+  # repository secrets documented in docs/operations/ci-database.md.
+  # ─────────────────────────────────────────────────────────────────────────────────────────────
+  database:
+    name: Database tests (Neon ci-testing)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # One run at a time against the shared CI branch; queued, never cancelled mid-migration.
+    concurrency:
+      group: neon-ci-testing
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.NEON_CI_DATABASE_URL }}
+      DATABASE_URL_UNPOOLED: ${{ secrets.NEON_CI_DATABASE_URL_UNPOOLED }}
+      NEON_BRANCH: ci-testing
+      NODE_ENV: test
+      # Known development and production endpoints; the job refuses to run against them.
+      CI_FORBIDDEN_ENDPOINTS: ep-rapid-lake-bgk09wmz,ep-winter-cake-bg5s9xnm
+    steps:
+      - name: Check CI database secrets
+        id: secrets
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$DATABASE_URL_UNPOOLED" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NEON_CI_DATABASE_URL / NEON_CI_DATABASE_URL_UNPOOLED not set; database tests skipped."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - if: steps.secrets.outputs.configured == 'true'
+        run: npm ci
+      - name: Verify target is the ci-testing branch (not development/production)
+        if: steps.secrets.outputs.configured == 'true'
+        run: npm run db:verify-ci
+      - name: Apply migrations to ci-testing
+        if: steps.secrets.outputs.configured == 'true'
+        run: npm run db:migrate:deploy
+      - name: Integration tests (live database)
+        if: steps.secrets.outputs.configured == 'true'
+        run: npm run test:integration
+      - name: Create ephemeral test staff accounts
+        if: steps.secrets.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          umask 077
+          OWNER_PW="$(openssl rand -base64 30 | tr -d '/+=')Aa1"
+          TECH_PW="$(openssl rand -base64 30 | tr -d '/+=')Tt9"
+          echo "::add-mask::$OWNER_PW"
+          echo "::add-mask::$TECH_PW"
+          printf 'E2E_STAFF_EMAIL=e2e.owner@example.test\nE2E_STAFF_NAME="E2E Owner"\nE2E_STAFF_PASSWORD=%s\nE2E_TECH_EMAIL=e2e.technician@example.test\nE2E_TECH_NAME="E2E Technician"\nE2E_TECH_PASSWORD=%s\n' "$OWNER_PW" "$TECH_PW" > .env.e2e.local
+          STAFF_PASSWORD="$OWNER_PW" npm run staff:create -- --email e2e.owner@example.test --name "E2E Owner" --role OWNER
+          STAFF_PASSWORD="$TECH_PW" npm run staff:create -- --email e2e.technician@example.test --name "E2E Technician" --role TECHNICIAN
+      - name: Set the ci-testing garage profile
+        if: steps.secrets.outputs.configured == 'true'
+        run: npm run garage:profile -- --name "MAPESA GARAGE" --country TZ --timezone Africa/Dar_es_Salaam --currency TZS
+      - if: steps.secrets.outputs.configured == 'true'
+        run: npm run build
+      - if: steps.secrets.outputs.configured == 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Playwright (database mode)
+        if: steps.secrets.outputs.configured == 'true'
+        run: npm run test:e2e
+        env:
+          E2E_DATABASE: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure() && steps.secrets.outputs.configured == 'true'
+        with:
+          name: playwright-report-database
           path: playwright-report
           retention-days: 7

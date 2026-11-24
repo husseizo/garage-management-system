@@ -1,3 +1,4 @@
+import type { MessageKey } from "@/i18n/translate";
 import type { StaffRole } from "@/modules/staff/roles";
 
 export type DashboardNavIcon =
@@ -12,7 +13,8 @@ export type DashboardNavIcon =
   | "settings";
 
 export interface DashboardNavItem {
-  title: string;
+  /** i18n key; translated by the dashboard layout. */
+  titleKey: MessageKey;
   href: string;
   icon: DashboardNavIcon;
   /** Restrict visibility to these roles. Omitted = all staff. Pages enforce the same rule. */
@@ -20,39 +22,45 @@ export interface DashboardNavItem {
 }
 
 export interface DashboardNavGroup {
-  label: string;
+  labelKey: MessageKey;
   items: DashboardNavItem[];
+}
+
+/** Navigation after translation, as passed to client components. */
+export interface TranslatedNavGroup {
+  label: string;
+  items: { title: string; href: string; icon: DashboardNavIcon }[];
 }
 
 export const dashboardNav: DashboardNavGroup[] = [
   {
-    label: "Workshop",
+    labelKey: "nav.groups.workshop",
     items: [
-      { title: "Overview", href: "/dashboard", icon: "overview" },
-      { title: "Bookings", href: "/dashboard/bookings", icon: "bookings" },
-      { title: "Calendar", href: "/dashboard/calendar", icon: "calendar" },
+      { titleKey: "nav.items.overview", href: "/dashboard", icon: "overview" },
+      { titleKey: "nav.items.bookings", href: "/dashboard/bookings", icon: "bookings" },
+      { titleKey: "nav.items.calendar", href: "/dashboard/calendar", icon: "calendar" },
     ],
   },
   {
-    label: "Records",
+    labelKey: "nav.groups.records",
     items: [
-      { title: "Customers", href: "/dashboard/customers", icon: "customers" },
-      { title: "Vehicles", href: "/dashboard/vehicles", icon: "vehicles" },
+      { titleKey: "nav.items.customers", href: "/dashboard/customers", icon: "customers" },
+      { titleKey: "nav.items.vehicles", href: "/dashboard/vehicles", icon: "vehicles" },
     ],
   },
   {
-    label: "Resources",
+    labelKey: "nav.groups.resources",
     items: [
-      { title: "Technicians", href: "/dashboard/technicians", icon: "technicians" },
-      { title: "Service bays", href: "/dashboard/service-bays", icon: "bays" },
-      { title: "Reminders", href: "/dashboard/reminders", icon: "reminders" },
+      { titleKey: "nav.items.technicians", href: "/dashboard/technicians", icon: "technicians" },
+      { titleKey: "nav.items.serviceBays", href: "/dashboard/service-bays", icon: "bays" },
+      { titleKey: "nav.items.reminders", href: "/dashboard/reminders", icon: "reminders" },
     ],
   },
   {
-    label: "Administration",
+    labelKey: "nav.groups.administration",
     items: [
       {
-        title: "Settings",
+        titleKey: "nav.items.settings",
         href: "/dashboard/settings",
         icon: "settings",
         roles: ["OWNER", "MANAGER"],

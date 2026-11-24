@@ -76,27 +76,38 @@ and owner approval). Migrations never fall back to the pooled URL. Branch strate
 | `AUTH_TRUST_HOST`            | optional          | `true` only behind a trusted proxy                               |
 | `LOG_LEVEL`                  | optional          | `info` by default                                                |
 | `ALLOW_PRODUCTION_DB_WRITES` | never by default  | Owner-approved override for the production guard                 |
+| `AUTH_RATE_LIMIT_PER_EMAIL`  | optional          | Staff sign-in attempts per email per 15 min (default 10)         |
+| `AUTH_RATE_LIMIT_PER_IP`     | optional          | Staff sign-in attempts per client IP per 15 min (default 50)     |
 
 All variables are validated at startup by `src/server/env-schema.ts`.
 
 ## Scripts
 
-| Script                            | Description                                            |
-| --------------------------------- | ------------------------------------------------------ |
-| `npm run dev`                     | Development server                                     |
-| `npm run build` / `npm start`     | Production build / serve                               |
-| `npm run typecheck`               | Generate route types and run `tsc --noEmit`            |
-| `npm run lint`                    | ESLint (zero warnings)                                 |
-| `npm run format` / `format:check` | Prettier                                               |
-| `npm test`                        | Vitest unit + integration                              |
-| `npm run test:e2e`                | Playwright (requires `npm run build` first)            |
-| `E2E_DATABASE=1 npm run test:e2e` | Playwright incl. signed-in tests against `development` |
-| `npm run validate`                | Typecheck, lint, format check, tests, build            |
-| `npm run db:migrate:dev`          | Create/apply a migration on the **development** branch |
-| `npm run db:migrate:deploy`       | Apply committed migrations                             |
-| `npm run db:migrate:status`       | Show migration status                                  |
-| `npm run db:guard`                | Check the DB target is a non-production branch         |
-| `npm run staff:create`            | Create or reset a staff account (dev only)             |
+| Script                            | Description                                                  |
+| --------------------------------- | ------------------------------------------------------------ |
+| `npm run dev`                     | Development server                                           |
+| `npm run build` / `npm start`     | Production build / serve                                     |
+| `npm run typecheck`               | Generate route types and run `tsc --noEmit`                  |
+| `npm run lint`                    | ESLint (zero warnings)                                       |
+| `npm run format` / `format:check` | Prettier                                                     |
+| `npm test`                        | Vitest unit + integration                                    |
+| `npm run test:e2e`                | Playwright (requires `npm run build` first)                  |
+| `E2E_DATABASE=1 npm run test:e2e` | Playwright incl. signed-in tests against `development`       |
+| `npm run validate`                | Typecheck, lint, format check, tests, build                  |
+| `npm run db:migrate:dev`          | Create/apply a migration on the **development** branch       |
+| `npm run db:migrate:deploy`       | Apply committed migrations                                   |
+| `npm run db:migrate:status`       | Show migration status                                        |
+| `npm run db:guard`                | Check the DB target is a non-production branch               |
+| `npm run db:dry-run -- <sql>`     | Apply a migration inside BEGIN … ROLLBACK (identity printed) |
+| `npm run db:verify-ci`            | CI only: refuse anything but the Neon `ci-testing` branch    |
+| `npm run garage:profile -- …`     | Set the garage profile (guarded, audited)                    |
+| `npm run staff:create`            | Create or reset a staff account (dev only)                   |
+
+## Languages
+
+The staff dashboard is available in **English (default)** and **Kiswahili**. Use the language switch
+in the header; the choice is stored in the `gms_locale` cookie. All UI text lives in
+`src/i18n/messages/{en,sw}.ts` (type-checked to have identical keys). See ADR 0014.
 
 ## Project structure
 

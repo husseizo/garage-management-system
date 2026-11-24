@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 
 import { requireStaff } from "@/server/auth/guards";
 
-import { SectionPage } from "../_components/section-page";
+import { SectionPage, sectionTitle } from "../_components/section-page";
 
-export const metadata: Metadata = { title: "Reminders" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: await sectionTitle("reminders") };
+}
 
 export default async function Page() {
   await requireStaff({ returnTo: "/dashboard/reminders" });

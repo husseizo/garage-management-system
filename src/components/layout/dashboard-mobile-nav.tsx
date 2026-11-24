@@ -7,14 +7,22 @@ import { Brand } from "@/components/layout/brand";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import type { DashboardNavGroup } from "@/config/navigation";
+import type { TranslatedNavGroup } from "@/config/navigation";
 
-export function DashboardMobileNav({ groups }: { groups: DashboardNavGroup[] }) {
+export function DashboardMobileNav({
+  groups,
+  navLabel,
+  openLabel,
+}: {
+  groups: TranslatedNavGroup[];
+  navLabel: string;
+  openLabel: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation">
+        <Button variant="ghost" size="icon" className="lg:hidden" aria-label={openLabel}>
           <Menu className="size-5" />
         </Button>
       </SheetTrigger>
@@ -27,7 +35,7 @@ export function DashboardMobileNav({ groups }: { groups: DashboardNavGroup[] }) 
           </SheetTitle>
         </SheetHeader>
         <div className="p-3">
-          <DashboardNav groups={groups} onNavigate={() => setOpen(false)} />
+          <DashboardNav groups={groups} label={navLabel} onNavigate={() => setOpen(false)} />
         </div>
       </SheetContent>
     </Sheet>
