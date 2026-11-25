@@ -7,7 +7,7 @@ test("repeated failed sign-ins are rate-limited with a generic message", async (
     "DB mode, chromium only",
   );
   test.setTimeout(120_000);
-  const email = `nobody-${Date.now()}@example.test`;
+  const email = `nobody-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
   const attempt = async () => {
     await page.goto("/login");
     await page.getByLabel("Email").fill(email);
