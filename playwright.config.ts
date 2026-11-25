@@ -30,6 +30,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: { baseURL, trace: "retain-on-failure" },
+  // DB mode waits on real server actions against a remote Neon branch (≈175 ms per round trip from
+  // a local machine); give UI assertions 10 s instead of 5 s. Assertions themselves are unchanged.
+  expect: { timeout: withDatabase ? 10_000 : 5_000 },
   projects: [
     // Signs in the test owner and technician once and saves their sessions (DB mode only).
     { name: "auth-setup", testMatch: /auth\.setup\.ts/ },

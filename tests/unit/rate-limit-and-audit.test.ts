@@ -1,44 +1,118 @@
 import { describe, expect, it } from "vitest";
 
 import { auditChanges, maskEmail, maskPhone } from "@/server/audit";
-import { consume, windowStartFor, type RateLimitStore } from "@/server/rate-limit-core";
+import { consume, type RateLimitStore } from "@/server/rate-limit-core";
 import { effectiveInstant, localDateString, startOfLocalDay } from "@/lib/dates";
 
-function memoryStore(): RateLimitStore & { data: Map<string, number> } {
-  const data = new Map<string, number>();
+/**
+ * In-memory store with the same contract as the PostgreSQL store: `limit` reusable slots per key,
+ * claimed atomically (the analogue of `FOR UPDATE SKIP LOCKED`). Each claim first yields to the
+ * event loop so concurrent callers genuinely interleave.
+ */
+function memoryStore(): RateLimitStore & { slots: Map<string, number[]> } {
+  const slots = new Map<string, number[]>();
   return {
-    data,
-    async increment(key, windowStart) {
-      const k = `${key}@${windowStart.toISOString()}`;
-      const n = (data.get(k) ?? 0) + 1;
-      data.set(k, n);
-      return n;
+    slots,
+    async claim(key, limit, now, busyUntil) {
+      await new Promise((r) => setTimeout(r, 0));
+      const s = slots.get(key) ?? [];
+      while (s.length < limit) s.push(-Infinity);
+      slots.set(key, s);
+      const live = s.slice(0, limit);
+      const free = live.reduce<number>(
+        (best, t, i) => (t <= now.getTime() && (best < 0 || t < live[best]!) ? i : best),
+        -1,
+      );
+      if (free < 0) return { claimed: false, nextFreeAt: new Date(Math.min(...live)) };
+      s[free] = busyUntil.getTime();
+      return { claimed: true, nextFreeAt: null };
     },
   };
 }
 
-describe("rate limiting (fixed window)", () => {
+const at = (iso: string) => new Date(`2026-11-24T${iso}Z`);
+
+describe("rate limiting (sliding window log)", () => {
   const rule = { name: "signin:email", limit: 3, windowSeconds: 900 };
 
-  it("allows up to the limit, then blocks with a retry-after", async () => {
+  it("allows up to the limit, then blocks with a retry-after until the oldest attempt expires", async () => {
     const store = memoryStore();
-    const now = new Date("2026-11-24T10:05:00Z");
     const results = [];
-    for (let i = 0; i < 4; i++) results.push(await consume(store, rule, "abc", now));
+    for (const t of ["10:05:00", "10:06:00", "10:07:00", "10:08:00"])
+      results.push(await consume(store, rule, "abc", at(t)));
     expect(results.map((r) => r.allowed)).toEqual([true, true, true, false]);
-    expect(results[3]!.retryAfterSeconds).toBe(600);
+    // Oldest counted attempt (10:05:00) leaves the window at 10:20:00 → 12 minutes from 10:08.
+    expect(results[3]!.retryAfterSeconds).toBe(720);
   });
 
-  it("starts a new window and isolates subjects", async () => {
+  it("does NOT reset at a clock-aligned boundary (B-1 regression)", async () => {
     const store = memoryStore();
-    const t0 = new Date("2026-11-24T10:14:59Z");
-    for (let i = 0; i < 3; i++) await consume(store, rule, "abc", t0);
-    expect((await consume(store, rule, "abc", t0)).allowed).toBe(false);
-    expect((await consume(store, rule, "other", t0)).allowed).toBe(true);
-    expect((await consume(store, rule, "abc", new Date("2026-11-24T10:15:00Z"))).allowed).toBe(
-      true,
+    for (let i = 0; i < 3; i++) await consume(store, rule, "abc", at("10:14:59"));
+    // The old fixed window reset here: 10:15:00 started a new bucket and allowed 3 more.
+    for (const t of ["10:15:00", "10:15:01", "10:20:00", "10:29:58"]) {
+      expect((await consume(store, rule, "abc", at(t))).allowed).toBe(false);
+    }
+    // Each attempt counts for exactly one window, (now − 15 min, now]: 1 ms before 10:29:59 the
+    // 10:14:59 attempts still count; at 10:29:59 they have aged out.
+    expect((await consume(store, rule, "abc", at("10:29:58.999"))).allowed).toBe(false);
+    expect((await consume(store, rule, "abc", at("10:29:59"))).allowed).toBe(true);
+  });
+
+  it("frees slots one by one as individual attempts age out", async () => {
+    const store = memoryStore();
+    await consume(store, rule, "abc", at("10:00:00"));
+    await consume(store, rule, "abc", at("10:05:00"));
+    await consume(store, rule, "abc", at("10:10:00"));
+    expect((await consume(store, rule, "abc", at("10:14:00"))).allowed).toBe(false);
+    expect((await consume(store, rule, "abc", at("10:15:00.5"))).allowed).toBe(true); // 10:00 aged out
+    expect((await consume(store, rule, "abc", at("10:16:00"))).allowed).toBe(false);
+  });
+
+  it("isolates subjects and rules", async () => {
+    const store = memoryStore();
+    for (let i = 0; i < 3; i++) await consume(store, rule, "abc", at("10:00:00"));
+    expect((await consume(store, rule, "abc", at("10:00:01"))).allowed).toBe(false);
+    expect((await consume(store, rule, "other", at("10:00:01"))).allowed).toBe(true);
+    expect(
+      (await consume(store, { ...rule, name: "signin:ip" }, "abc", at("10:00:01"))).allowed,
+    ).toBe(true);
+  });
+
+  it("never allows more than the limit in ANY rolling window (randomised, 2 hours)", async () => {
+    const store = memoryStore();
+    const limit = { name: "signin:email", limit: 10, windowSeconds: 900 };
+    let seed = 42;
+    const rand = () => (seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31) / 2 ** 31;
+    const allowed: number[] = [];
+    let t = at("09:00:00").getTime();
+    for (let i = 0; i < 2_000; i++) {
+      t += Math.floor(rand() * 8_000); // bursts and gaps, crossing many 15-minute boundaries
+      if ((await consume(store, limit, "abc", new Date(t))).allowed) allowed.push(t);
+    }
+    for (const end of allowed) {
+      const inWindow = allowed.filter((x) => x > end - 900_000 && x <= end).length;
+      expect(inWindow).toBeLessThanOrEqual(10);
+    }
+    expect(allowed.length).toBeGreaterThan(10); // and it does recover after windows pass
+  });
+
+  it("concurrent requests never share a slot, so the limit holds under a burst", async () => {
+    const store = memoryStore();
+    const now = at("10:00:00");
+    const results = await Promise.all(
+      Array.from({ length: 50 }, () => consume(store, { ...rule, limit: 10 }, "abc", now)),
     );
-    expect(windowStartFor(t0, 900).toISOString()).toBe("2026-11-24T10:00:00.000Z");
+    expect(results.filter((r) => r.allowed)).toHaveLength(10);
+    expect(store.slots.get("signin:email:abc")!.filter((t) => t > now.getTime())).toHaveLength(10);
+  });
+
+  it("lowering the limit takes effect immediately; raising it adds slots", async () => {
+    const store = memoryStore();
+    for (let i = 0; i < 3; i++) await consume(store, rule, "abc", at("10:00:00"));
+    expect((await consume(store, { ...rule, limit: 2 }, "abc", at("10:01:00"))).allowed).toBe(
+      false,
+    );
+    expect((await consume(store, { ...rule, limit: 4 }, "abc", at("10:01:00"))).allowed).toBe(true);
   });
 });
 
