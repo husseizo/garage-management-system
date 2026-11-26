@@ -4,34 +4,27 @@
  * Deletes customers/vehicles (and their contacts, plates and ownerships) created by the two
  * ephemeral E2E staff accounts, plus sign-in rate-limit counters. Staff accounts and audit rows
  * are kept: `audit_logs` is append-only by design (ADR 0012) and staff with audit history are
- * protected by ON DELETE RESTRICT. Refuses to run anywhere but `ci-testing`.
+ * protected by ON DELETE RESTRICT. Refuses to run anywhere but the pinned `ci-testing` branch,
+ * re-checked inside the deleting transaction.
  */
 import { Pool } from "@neondatabase/serverless";
 
+import { assertClientBranch, describeTarget, verifyCiTarget } from "../src/server/db/identity";
 import { resolveMigrationUrl } from "../src/server/db/target";
 
 const E2E_STAFF = ["e2e.owner@example.test", "e2e.technician@example.test"];
 
-function endpoint(url: string) {
-  return new URL(url).hostname.split(".")[0]!.replace(/-pooler$/, "");
-}
-
 async function main() {
-  if (process.env.NEON_BRANCH !== "ci-testing")
-    throw new Error('NEON_BRANCH must be "ci-testing".');
+  // Pinned ci-testing target, verified against the server on both connections (ADR 0017).
+  const target = await verifyCiTarget("ci-cleanup", process.env);
   const url = resolveMigrationUrl(process.env);
-  if (!url) throw new Error("DATABASE_URL_UNPOOLED is required.");
-  const forbidden = (process.env.CI_FORBIDDEN_ENDPOINTS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (forbidden.includes(endpoint(url)))
-    throw new Error("Refusing to clean a development/production endpoint.");
 
   const pool = new Pool({ connectionString: url });
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
+    // Same connection, same transaction as the deletes: refuse (and roll back) on any mismatch.
+    await assertClientBranch(c, target);
     const staff = (
       await c.query<{ id: string }>("select id from staff_users where email = any($1)", [E2E_STAFF])
     ).rows.map((r) => r.id);
@@ -80,7 +73,7 @@ async function main() {
       )
     ).rows[0]!;
     console.log(
-      `ci-cleanup: endpoint ${endpoint(url)} removed ${JSON.stringify(counts)}; remaining E2E customers=${left.customers} vehicles=${left.vehicles}`,
+      `ci-cleanup: ${describeTarget(target)}; removed ${JSON.stringify(counts)}; remaining E2E customers=${left.customers} vehicles=${left.vehicles}`,
     );
     if (left.customers || left.vehicles) process.exit(1);
   } catch (error) {

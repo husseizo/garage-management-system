@@ -24,6 +24,8 @@ export default defineConfig({
         test: {
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],
+          // Verifies the live database identity before any test runs (fails closed).
+          globalSetup: ["tests/integration/global-setup.ts"],
           // Live Neon tests: allow for cold-start latency of a suspended compute.
           testTimeout: 30_000,
         },

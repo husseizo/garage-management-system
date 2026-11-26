@@ -55,6 +55,10 @@ describe("assertWritableTarget", () => {
     expect(() => assertWritableTarget({ NODE_ENV: "production" }, "migrate")).toThrow(/NODE_ENV/);
   });
 
+  it.each([undefined, "", "   "])("fails closed when NEON_BRANCH is %j", (name) => {
+    expect(() => assertWritableTarget({ NEON_BRANCH: name }, "migrate")).toThrow(/not set/);
+  });
+
   it("allows production only with the explicit owner override", () => {
     expect(() =>
       assertWritableTarget(

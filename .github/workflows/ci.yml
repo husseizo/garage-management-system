@@ -90,7 +90,12 @@ jobs:
       DATABASE_URL_UNPOOLED: ${{ secrets.NEON_CI_DATABASE_URL_UNPOOLED }}
       NEON_BRANCH: ci-testing
       NODE_ENV: test
-      # Known development and production endpoints; every database step refuses to run against them.
+      # Pinned CI target (ADR 0017). Every database step verifies that both connection strings use
+      # exactly this endpoint AND that the server reports exactly this branch id; otherwise it fails
+      # before writing. Must equal the ci-testing entry in src/server/db/known-targets.ts.
+      DB_EXPECTED_BRANCH_ID: br-dawn-lake-bgrg54n5
+      DB_EXPECTED_ENDPOINT_ID: ep-nameless-grass-bg6ppo3o
+      # Extra layer only (not proof of identity): known development and production endpoints.
       CI_FORBIDDEN_ENDPOINTS: ep-rapid-lake-bgk09wmz,ep-winter-cake-bg5s9xnm
     steps:
       - name: Require CI database secrets

@@ -55,13 +55,21 @@ export function isProductionBranchName(name: string | undefined): boolean {
 }
 
 /**
- * Refuse schema changes or data writes from local tooling when the configured Neon branch is a
- * production branch, unless the owner explicitly sets ALLOW_PRODUCTION_DB_WRITES=true.
+ * Pure pre-check for tooling that writes. Fails closed: refuses NODE_ENV=production, an unset
+ * NEON_BRANCH, and a production branch name, unless the owner explicitly sets
+ * ALLOW_PRODUCTION_DB_WRITES=true. This is NOT proof of identity — labels are self-declared;
+ * `verifyWriteTarget()` (identity.ts) checks the endpoint and the server-reported branch id.
  * Messages name variables and branch names only — never connection strings.
  */
 export function assertWritableTarget(env: Env, action: string): void {
   if (env.NODE_ENV === "production" && env[PRODUCTION_OVERRIDE_VAR] !== "true") {
     throw new UnsafeDatabaseTargetError(`Refusing to ${action} with NODE_ENV=production.`);
+  }
+  if (!clean(env.NEON_BRANCH)) {
+    throw new UnsafeDatabaseTargetError(
+      `Refusing to ${action}: NEON_BRANCH is not set. Name the branch the connection strings ` +
+        `belong to (it is cross-checked against the server).`,
+    );
   }
   if (isProductionBranchName(env.NEON_BRANCH) && env[PRODUCTION_OVERRIDE_VAR] !== "true") {
     throw new UnsafeDatabaseTargetError(
