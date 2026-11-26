@@ -198,7 +198,12 @@ old code.
   marker. Without a matching marker it throws before Prisma connects.
 - An unknown subcommand is treated as **write**, which fails closed.
 
-**B. Single guarded runner (code):** `scripts/db-run.ts <prisma args>`.
+> **Implementation note (PR 2):** Prisma 7 accepts an async `prisma.config.ts`, so the full
+> verification of G-1, including the server probe, runs inside the config itself. No marker and no
+> separate runner are needed, and there is no gap between the check and the command. B below was
+> therefore not built.
+
+**B. Single guarded runner (code; superseded, see note above):** `scripts/db-run.ts <prisma args>`.
 
 - It runs G-1's `verifyWriteTarget` for the matching action.
 - On success, it starts `prisma` with the marker in the child's environment only.

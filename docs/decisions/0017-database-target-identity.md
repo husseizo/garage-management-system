@@ -71,5 +71,16 @@ test can write.
     TLS-verified Neon host and the exact endpoint match.
   - Credential separation and least-privilege roles (proposal G-2 part C) are the measures that
     address direct access. They need separate owner approval.
-- Running `npx prisma …` directly still bypasses `db-guard`. That is closed in Phase 1C-0 PR 2
-  (G-2 A/B).
+- **Prisma CLI (G-2 A, Phase 1C-0 PR 2).** `prisma.config.ts` exports an async config that
+  classifies the Prisma command (`src/server/db/prisma-command.ts`). It runs for **every** Prisma
+  command, so typing `npx prisma …` cannot skip the guard:
+  - `migrate deploy|dev|resolve`, `db execute`, `studio` and any unknown command run
+    `verifyWriteTarget` first;
+  - `migrate reset`, `db push` and `db seed` are always refused;
+  - read-only commands are unchanged;
+  - a non-CLI loader, such as an editor extension, gets no connection string.
+
+  The `db:migrate:*` npm scripts call Prisma directly, and `db:guard` remains as a standalone
+  check. This replaces the marker and runner proposed in G-2 B: verification now happens in the
+  same process that connects, with no hand-over step. Editing `prisma.config.ts` or using another
+  client still bypasses it.

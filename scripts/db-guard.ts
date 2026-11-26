@@ -1,5 +1,6 @@
 /**
- * Pre-flight check run before `prisma migrate deploy` / `prisma migrate dev` (ADR 0017).
+ * Standalone pre-flight check (ADR 0017): `npm run db:guard`. Prisma commands no longer need it —
+ * `prisma.config.ts` runs the same verification for every Prisma command that can write.
  *
  *   tsx scripts/db-guard.ts migrate-deploy
  *
