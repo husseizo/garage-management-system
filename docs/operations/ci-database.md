@@ -13,13 +13,13 @@
 
 ## Why a separate branch
 
-| Concern                    | How `ci-testing` addresses it                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Isolation from development | Separate compute endpoint and data; CI writes (E2E customers, vehicles, audit rows) never appear in `development`               |
-| Production safety          | `npm run db:verify-ci` refuses any branch name other than `ci-testing` and the known dev/prod endpoint ids                      |
-| Concurrency                | Workflow `concurrency: neon-ci-testing` runs one database job at a time; never cancelled mid-migration                          |
-| Test design                | Tests use unique run ids and handle pre-existing data; schema tests run in rolled-back transactions. No test depends on cleanup |
-| Audit log (append-only)    | E2E creates audit rows that cannot be deleted; acceptable on a disposable CI branch, not on `development`                       |
+| Concern                    | How `ci-testing` addresses it                                                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Isolation from development | Separate compute endpoint and data; CI writes (E2E customers, vehicles, audit rows) never appear in `development`                                                                      |
+| Production safety          | Every database step verifies the pinned endpoint (exact match) and the branch id the server reports, `br-dawn-lake-bgrg54n5` (ADR 0017); the dev/prod deny-list is an extra layer only |
+| Concurrency                | Workflow `concurrency: neon-ci-testing` runs one database job at a time; never cancelled mid-migration                                                                                 |
+| Test design                | Tests use unique run ids and handle pre-existing data; schema tests run in rolled-back transactions. No test depends on cleanup                                                        |
+| Audit log (append-only)    | E2E creates audit rows that cannot be deleted; acceptable on a disposable CI branch, not on `development`                                                                              |
 
 ## One-time setup (owner)
 
@@ -59,7 +59,11 @@
   `neon branches reset ci-testing --parent --project-id quiet-violet-31193699`. That restores it to
   `production`'s current state (no data). The next CI run re-applies migrations.
 - **Rotate** the CI role password if a secret may have leaked, then update the two secrets.
-- If the dev or prod endpoint ids ever change, update `CI_FORBIDDEN_ENDPOINTS` in the workflow.
+- If the `ci-testing` branch or endpoint is ever recreated, its ids change and every CI database
+  step **fails closed** until a reviewed PR updates `DB_EXPECTED_BRANCH_ID` /
+  `DB_EXPECTED_ENDPOINT_ID` in the workflow **and** the `ci-testing` entry in
+  `src/server/db/known-targets.ts` (they must agree). Do the same for the registry if the dev or
+  prod ids change, and keep `CI_FORBIDDEN_ENDPOINTS` in step.
 
 ## What runs where
 

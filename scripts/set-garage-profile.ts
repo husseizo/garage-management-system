@@ -6,7 +6,7 @@
  *     --timezone Africa/Dar_es_Salaam --currency TZS
  *
  * Only the fields passed are set. Nothing is invented: optional contact and address fields stay
- * empty unless provided. Refuses production branches (see src/server/db/target.ts).
+ * empty unless provided. Refuses production and any target whose identity cannot be verified (src/server/db/identity.ts).
  */
 import "dotenv/config";
 
@@ -16,7 +16,7 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import { z } from "zod";
 
 import { PrismaClient } from "../src/generated/prisma/client";
-import { assertWritableTarget } from "../src/server/db/target";
+import { connectionKinds, describeTarget, verifyWriteTarget } from "../src/server/db/identity";
 
 const profileSchema = z.object({
   displayName: z.string().trim().min(1).max(120),
@@ -39,9 +39,12 @@ const profileSchema = z.object({
 });
 
 async function main() {
-  assertWritableTarget(process.env, "set the garage profile");
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set (see .env.example).");
+  // Fail closed unless the endpoint and the server-reported branch match the expected target.
+  const target = await verifyWriteTarget("garage-profile", process.env, {
+    connections: connectionKinds(process.env, "pooled"),
+  });
+  console.log(`garage:profile: target ${describeTarget(target)}`);
+  const url = process.env.DATABASE_URL!;
 
   const { values } = parseArgs({
     options: {
