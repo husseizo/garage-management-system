@@ -11,6 +11,7 @@ import {
   type RateLimitRule,
   type RateLimitStore,
 } from "./rate-limit-core";
+import { createSqlRateLimitStore } from "./rate-limit-store";
 
 const WINDOW_15_MIN = 15 * 60;
 
@@ -39,23 +40,21 @@ export function rateLimitKey(subject: string): string {
   return createHmac("sha256", secret).update(subject).digest("base64url").slice(0, 43);
 }
 
-const dbStore: RateLimitStore = {
-  async increment(key, windowStart, expiresAt) {
-    const rows = await getDb().$queryRaw<{ count: number }[]>`
-      INSERT INTO rate_limit_buckets (key, window_start, count, expires_at)
-      VALUES (${key}, ${windowStart}, 1, ${expiresAt})
-      ON CONFLICT (key, window_start) DO UPDATE SET count = rate_limit_buckets.count + 1
-      RETURNING count`;
-    if (Math.random() < 0.01) {
-      // Opportunistic housekeeping; a scheduled job takes over in Phase 1F.
-      void getDb()
-        .$executeRaw`DELETE FROM rate_limit_buckets WHERE expires_at < now() - interval '1 hour'`.catch(
-        () => undefined,
-      );
-    }
-    return rows[0]?.count ?? 1;
-  },
-};
+let dbStore: RateLimitStore | undefined;
+function store(): RateLimitStore {
+  dbStore ??= createSqlRateLimitStore(getDb());
+  return dbStore;
+}
+
+function housekeeping() {
+  if (Math.random() < 0.01) {
+    // Opportunistic housekeeping; a scheduled job takes over in Phase 1F.
+    void getDb()
+      .$executeRaw`DELETE FROM rate_limit_buckets WHERE expires_at < now() - interval '1 hour'`.catch(
+      () => undefined,
+    );
+  }
+}
 
 /**
  * Consume one unit for `subject` under `rule`. Fails open (allowed) only when no database is
@@ -65,8 +64,9 @@ export async function checkRateLimit(
   rule: RateLimitRule,
   subject: string,
 ): Promise<RateLimitResult> {
-  if (!isDatabaseConfigured()) return { allowed: true, count: 0, retryAfterSeconds: 0 };
-  const result = await consume(dbStore, rule, rateLimitKey(subject));
+  if (!isDatabaseConfigured()) return { allowed: true, retryAfterSeconds: 0 };
+  const result = await consume(store(), rule, rateLimitKey(subject));
+  housekeeping();
   if (!result.allowed)
     logger.warn({ event: "rate_limit.exceeded", rule: rule.name }, "rate limit exceeded");
   return result;

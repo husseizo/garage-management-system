@@ -4,6 +4,9 @@
  */
 export const LOGIN_PATH = "/login";
 export const STAFF_HOME = "/dashboard";
+/** Clears a cookie whose staff record is no longer valid, then shows the sign-in page. */
+export const SESSION_ENDED_PATH = "/session-ended";
+export const SESSION_ENDED_LOGIN = `${LOGIN_PATH}?ended=1`;
 
 export function isDashboardPath(pathname: string): boolean {
   return pathname === STAFF_HOME || pathname.startsWith(`${STAFF_HOME}/`);

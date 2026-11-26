@@ -1,24 +1,31 @@
 /**
- * Pre-flight check run before `prisma migrate deploy` / `prisma migrate dev`.
- * Exits non-zero when the configured target is a production branch or when no direct
- * (unpooled) connection string is available. Prints branch/endpoint names only, never secrets.
+ * Standalone pre-flight check (ADR 0017): `npm run db:guard`. Prisma commands no longer need it —
+ * `prisma.config.ts` runs the same verification for every Prisma command that can write.
+ *
+ *   tsx scripts/db-guard.ts migrate-deploy
+ *
+ * Verifies the target from the connection strings AND the branch id the server reports, and exits
+ * non-zero on any doubt (fail closed). Prints identifiers only, never connection strings.
  */
 import "dotenv/config";
 
-import {
-  assertWritableTarget,
-  resolveMigrationUrl,
-  UnsafeDatabaseTargetError,
-} from "../src/server/db/target";
+import { connectionKinds, describeTarget, verifyWriteTarget } from "../src/server/db/identity";
+import type { WriteAction } from "../src/server/db/known-targets";
 
-try {
-  const action = process.argv[2] ?? "run migrations";
-  assertWritableTarget(process.env, action);
-  const url = resolveMigrationUrl(process.env);
-  if (!url) throw new UnsafeDatabaseTargetError("No DIRECT_URL or DATABASE_URL_UNPOOLED is set.");
-  const host = new URL(url).hostname.split(".")[0];
-  console.log(`db-guard: OK — branch "${process.env.NEON_BRANCH ?? "(unset)"}", endpoint ${host}`);
-} catch (error) {
+const ACTIONS: readonly WriteAction[] = ["migrate-dev", "migrate-deploy", "dry-run"];
+
+async function main() {
+  const action = process.argv[2] as WriteAction | undefined;
+  if (!action || !ACTIONS.includes(action)) {
+    throw new Error(`Usage: db-guard <${ACTIONS.join("|")}>`);
+  }
+  const verified = await verifyWriteTarget(action, process.env, {
+    connections: connectionKinds(process.env, "direct"),
+  });
+  console.log(`db-guard: OK — ${action} on ${describeTarget(verified)}`);
+}
+
+main().catch((error) => {
   console.error(`db-guard: ${error instanceof Error ? error.message : "unknown error"}`);
   process.exit(1);
-}
+});

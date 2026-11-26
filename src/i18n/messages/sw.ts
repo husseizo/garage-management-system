@@ -79,6 +79,7 @@ export const sw: Messages = {
     invalidCredentials: "Barua pepe au nenosiri si sahihi.",
     unavailable: "Kuingia hakupatikani kwa sasa. Tafadhali jaribu tena baadaye.",
     rateLimited: "Majaribio mengi ya kuingia. Tafadhali subiri dakika chache kisha ujaribu tena.",
+    sessionEnded: "Muda wa kuingia kwako umeisha. Tafadhali ingia tena.",
   },
   overview: {
     welcome: "Karibu",

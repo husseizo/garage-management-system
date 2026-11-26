@@ -31,15 +31,18 @@ const urls: Record<string, string> = {};
 /** Save the customer form; if earlier E2E runs trigger a similar-name warning, confirm it. */
 async function saveCustomer(page: Page) {
   await page.getByRole("button", { name: "Save" }).click();
-  const created = page.waitForURL(/notice=created/, { timeout: 4_000 }).then(
-    () => true,
-    () => false,
-  );
-  if (!(await created)) {
-    await page.getByLabel("This is a different customer — save anyway").check();
+  // Either the customer is saved, or earlier test data triggers a duplicate warning to confirm.
+  // Wait for whichever happens (no fixed sleep: saves can be slow on a cold branch).
+  const confirm = page.getByLabel("This is a different customer — save anyway");
+  const outcome = await Promise.race([
+    page.waitForURL(/notice=created/, { timeout: 20_000 }).then(() => "created" as const),
+    confirm.waitFor({ state: "visible", timeout: 20_000 }).then(() => "duplicate" as const),
+  ]);
+  if (outcome === "duplicate") {
+    await confirm.check();
     await page.getByRole("button", { name: "Save" }).click();
   }
-  await expect(page).toHaveURL(/notice=created/);
+  await expect(page).toHaveURL(/notice=created/, { timeout: 20_000 });
 }
 
 async function pickCustomer(page: Page, label: RegExp | string, name: string) {

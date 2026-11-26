@@ -19,6 +19,8 @@ ADRs are immutable once accepted — supersede them with a new ADR rather than e
 | 0012 | [Append-only audit log](0012-append-only-audit-log.md)                                           | Accepted                           |
 | 0013 | [Portal accounts and explicit per-customer access grants](0013-customer-portal-access-grants.md) | Accepted (design)                  |
 | 0014 | [Dashboard localisation (English default, Kiswahili)](0014-localization.md)                      | Accepted                           |
-| 0015 | [Database-backed rate limiting](0015-rate-limiting.md)                                           | Accepted                           |
+| 0015 | [Database-backed rate limiting](0015-rate-limiting.md)                                           | Accepted (revised 2026-11-25)      |
+| 0016 | [Server-side revocation of staff sessions](0016-staff-session-revocation.md)                     | Step 1 accepted; Step 2 proposed   |
+| 0017 | [Database target identity for every write tool](0017-database-target-identity.md)                | Accepted                           |
 
 Template: copy `0000-template.md`.
