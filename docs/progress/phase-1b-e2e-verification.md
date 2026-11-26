@@ -19,7 +19,8 @@
 
 ## 2. Results for the previously untested flows
 
-New spec `tests/e2e/lifecycle.spec.ts` (11 tests, desktop Chromium, DB mode). The resulting rows were
+New spec `tests/e2e/lifecycle.spec.ts` (9 tests plus the 2 shared auth-setup steps, desktop
+Chromium, DB mode). The resulting rows were
 then checked with read-only SQL on the temporary branch (run `LIFE3`).
 
 | Area         | Flow                                                                 | UI (E2E) | Database state                                                                                                                                                       |
