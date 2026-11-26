@@ -126,11 +126,15 @@ jobs:
           umask 077
           OWNER_PW="$(openssl rand -base64 30 | tr -d '/+=')Aa1"
           TECH_PW="$(openssl rand -base64 30 | tr -d '/+=')Tt9"
+          REVOKE_PW="$(openssl rand -base64 30 | tr -d '/+=')Rr5"
           echo "::add-mask::$OWNER_PW"
           echo "::add-mask::$TECH_PW"
-          printf 'E2E_STAFF_EMAIL=e2e.owner@example.test\nE2E_STAFF_NAME="E2E Owner"\nE2E_STAFF_PASSWORD=%s\nE2E_TECH_EMAIL=e2e.technician@example.test\nE2E_TECH_NAME="E2E Technician"\nE2E_TECH_PASSWORD=%s\n' "$OWNER_PW" "$TECH_PW" > .env.e2e.local
+          echo "::add-mask::$REVOKE_PW"
+          printf 'E2E_STAFF_EMAIL=e2e.owner@example.test\nE2E_STAFF_NAME="E2E Owner"\nE2E_STAFF_PASSWORD=%s\nE2E_TECH_EMAIL=e2e.technician@example.test\nE2E_TECH_NAME="E2E Technician"\nE2E_TECH_PASSWORD=%s\nE2E_REVOKE_EMAIL=e2e.revoke@example.test\nE2E_REVOKE_PASSWORD=%s\n' "$OWNER_PW" "$TECH_PW" "$REVOKE_PW" > .env.e2e.local
           STAFF_PASSWORD="$OWNER_PW" npm run staff:create -- --email e2e.owner@example.test --name "E2E Owner" --role OWNER
           STAFF_PASSWORD="$TECH_PW" npm run staff:create -- --email e2e.technician@example.test --name "E2E Technician" --role TECHNICIAN
+          # S-1: account the session-revocation test deactivates and re-roles (reset here every run).
+          STAFF_PASSWORD="$REVOKE_PW" npm run staff:create -- --email e2e.revoke@example.test --name "E2E Revoke" --role MANAGER
       - name: Set the ci-testing garage profile
         run: npm run garage:profile -- --name "MAPESA GARAGE" --country TZ --timezone Africa/Dar_es_Salaam --currency TZS
       - run: npm run build
