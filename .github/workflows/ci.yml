@@ -93,7 +93,7 @@ jobs:
       # Pinned CI target (ADR 0017). Every database step verifies that both connection strings use
       # exactly this endpoint AND that the server reports exactly this branch id; otherwise it fails
       # before writing. Must equal the ci-testing entry in src/server/db/known-targets.ts.
-      DB_EXPECTED_BRANCH_ID: br-dawn-lake-bgrg54n5
+      DB_EXPECTED_BRANCH_ID: br-negative-test-000000
       DB_EXPECTED_ENDPOINT_ID: ep-nameless-grass-bg6ppo3o
       # Extra layer only (not proof of identity): known development and production endpoints.
       CI_FORBIDDEN_ENDPOINTS: ep-rapid-lake-bgk09wmz,ep-winter-cake-bg5s9xnm

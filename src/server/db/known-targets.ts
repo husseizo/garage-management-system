@@ -53,7 +53,7 @@ export const KNOWN_TARGETS: readonly KnownTarget[] = [
   },
   {
     name: "ci-testing",
-    branchId: "br-dawn-lake-bgrg54n5",
+    branchId: "br-negative-test-000000",
     endpointId: "ep-nameless-grass-bg6ppo3o",
     database: "neondb",
     production: false,
