@@ -12,7 +12,11 @@ import { Pool } from "@neondatabase/serverless";
 import { assertClientBranch, describeTarget, verifyCiTarget } from "../src/server/db/identity";
 import { resolveMigrationUrl } from "../src/server/db/target";
 
-const E2E_STAFF = ["e2e.owner@example.test", "e2e.technician@example.test"];
+const E2E_STAFF = [
+  "e2e.owner@example.test",
+  "e2e.technician@example.test",
+  "e2e.revoke@example.test",
+];
 
 async function main() {
   // Pinned ci-testing target, verified against the server on both connections (ADR 0017).

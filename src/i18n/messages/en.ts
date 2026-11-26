@@ -78,6 +78,7 @@ export const en = {
     invalidCredentials: "Incorrect email or password.",
     unavailable: "Sign-in is unavailable right now. Please try again later.",
     rateLimited: "Too many sign-in attempts. Please wait a few minutes and try again.",
+    sessionEnded: "Your session has ended. Please sign in again.",
   },
   overview: {
     welcome: "Welcome",

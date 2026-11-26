@@ -1,6 +1,7 @@
 # 0016 — Server-side revocation of staff sessions (S-1)
 
-- **Status:** Proposed — awaiting owner approval. Nothing in this ADR is implemented yet.
+- **Status:** **Step 1 accepted and implemented** (owner approval 2026-11-26, Phase 1C-0 PR 3). Step 2
+  (`auth_sessions`, server-side sign-out) remains Proposed for Phase 1C.
 - **Date:** 2026-11-25
 - **Relates to:** ADR 0004 (staff authentication), ADR 0005 (authorization boundaries), planned
   `auth_sessions` / `auth_events` tables (data dictionary, Phase 1C)
@@ -114,3 +115,21 @@ with `role` now read from the database instead of the token.
   data screen.
 - The Auth.js upgrade path is unaffected: only the `jwt` / `session` callbacks and
   `getStaffSession()` change.
+
+## Step 1 — as implemented (Phase 1C-0 PR 3)
+
+- `resolveStaffSession()` in `src/server/auth/guards.ts` is memoised per request with React
+  `cache()`. It reads `staff_users` by the token's `sub` (one primary-key query) and returns
+  `anonymous`, `ended` or `active`. Role, name and email come from the database; the token's
+  `role` is ignored. A database error throws `SERVICE_UNAVAILABLE` (fail closed); with no database
+  configured, a cookie counts as ended.
+- `getStaffSession`, `assertStaff` and `assertPermission` deny an ended session (401).
+  `requireStaff` and `requirePermission` redirect it to `/session-ended`.
+- `/session-ended` is a route handler. It clears the cookie with `signOut` and shows
+  `/login?ended=1` ("Your session has ended. Please sign in again."). A redirect to `/login` would
+  loop, because the proxy still sees the cookie. A still-valid session is sent back to the
+  dashboard instead of being signed out, so a link to that URL cannot log anyone out.
+- The proxy and the Auth.js callbacks are unchanged. Nobody has to sign in again because of this
+  change.
+- **Still open (Step 2):** sign-out is cookie-only. A cookie copied before sign-out stays usable
+  until it expires, for as long as the staff member stays active.

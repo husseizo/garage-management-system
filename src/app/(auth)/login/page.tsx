@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Brand } from "@/components/layout/brand";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { siteConfig } from "@/config/site";
@@ -19,9 +20,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string | string[] }>;
+  searchParams: Promise<{ callbackUrl?: string | string[]; ended?: string | string[] }>;
 }) {
-  const [{ callbackUrl }, t, locale] = await Promise.all([
+  const [{ callbackUrl, ended }, t, locale] = await Promise.all([
     searchParams,
     getTranslator(),
     getLocale(),
@@ -41,7 +42,12 @@ export default async function LoginPage({
               {t("auth.signInDescription", { system: siteConfig.systemName })}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {ended ? (
+              <Alert role="status">
+                <AlertDescription>{t("auth.sessionEnded")}</AlertDescription>
+              </Alert>
+            ) : null}
             <LoginForm callbackUrl={safe} />
           </CardContent>
         </Card>
